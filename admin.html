@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Aprovação — Parkncharge</title>
+  <meta name="theme-color" content="#436E91">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .rev-card { background: #fff; border-radius: var(--radius-lg); padding: 16px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    .rev-photos { display: grid; grid-auto-flow: column; grid-auto-columns: 45%; gap: 8px; overflow-x: auto; margin: 12px 0; }
+    .rev-photos a { aspect-ratio: 4/3; border-radius: 12px; background: #E4E8EC center/cover; display: block; }
+    .rev-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <div class="page-top"><div class="wrap page"><h1>Aprovação de anúncios</h1></div></div>
+  <main class="sheet">
+    <div class="page">
+      <div class="chips" id="filters" style="margin-bottom:20px">
+        <button class="chip on" data-s="pendente">Pendentes</button>
+        <button class="chip" data-s="ativo">Ativos</button>
+        <button class="chip" data-s="recusado">Recusados</button>
+        <button class="chip" data-s="pausado">Pausados</button>
+      </div>
+      <div id="content"><div class="spinner"></div></div>
+    </div>
+  </main>
+
+  <script src="assets/app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
+  <script>
+    PNC.renderChrome({ active: 'Perfil', footer: false });
+    const $ = id => document.getElementById(id);
+    const esc = PNC.esc, db = PNC.db();
+    let status = 'pendente';
+
+    async function load() {
+      $('content').innerHTML = '<div class="spinner"></div>';
+      const { data: ls, error } = await db.from('listings').select('*').eq('status', status).order('submitted_at', { ascending: true }).limit(100);
+      if (error) { $('content').innerHTML = `<div class="msg err">${PNC.dbError(error)}</div>`; return; }
+      if (!ls.length) { $('content').innerHTML = `<div class="empty-card"><strong>Nada por aqui</strong>Sem anúncios neste estado.</div>`; return; }
+      const ids = ls.map(l => l.id), hosts = [...new Set(ls.map(l => l.host_id))];
+      const [pv, ph, sc, hp] = await Promise.all([
+        db.from('listing_private').select('*').in('listing_id', ids),
+        db.from('listing_photos').select('*').in('listing_id', ids).order('position'),
+        db.from('listing_schedule').select('*').in('listing_id', ids).order('weekday'),
+        db.from('host_profiles').select('*').in('user_id', hosts),
+      ]);
+      const by = (arr, k, id) => (arr.data || []).filter(x => x[k] === id);
+      $('content').innerHTML = ls.map(l => {
+        const p = by(pv, 'listing_id', l.id)[0] || {};
+        const photos = by(ph, 'listing_id', l.id);
+        const sched = by(sc, 'listing_id', l.id).map(s => `${PNC.WEEKDAYS[s.weekday].slice(0, 3)} ${s.opens_at.slice(0, 5)}–${s.closes_at.slice(0, 5)}`).join(', ');
+        const h = by(hp, 'user_id', l.host_id)[0] || {};
+        const t = PNC.SPOT_TYPES.find(x => x[0] === l.spot_type);
+        const prices = [l.price_hour && PNC.euro(l.price_hour, '/h'), l.price_day && PNC.euro(l.price_day, '/dia'), l.price_month && PNC.euro(l.price_month, '/mês')].filter(Boolean).join(' · ');
+        return `<article class="rev-card">
+          <h3 style="margin:0 0 4px">${esc(l.title)}</h3>
+          <div class="muted">${t ? t[1] : ''} · ${esc(l.zone)} · ${prices}</div>
+          <div class="rev-photos">${photos.map(f => `<a href="${PNC.photoUrl(f.storage_path)}" target="_blank" rel="noopener" style="background-image:url('${PNC.photoUrl(f.storage_path)}')" aria-label="Ver fotografia"></a>`).join('')}</div>
+          <div class="review"><dl>
+            <dt>Morada</dt><dd>${esc(p.address || '—')} ${esc(p.postal_code || '')}${p.lat ? ` · <a href="https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=18/${p.lat}/${p.lng}" target="_blank" rel="noopener">mapa</a>` : ''}</dd>
+            <dt>Anfitrião</dt><dd>${h.host_type === 'empresa' ? esc(h.company_name) + ' (empresa)' : 'Particular'}${h.nif ? ' · NIF ' + esc(h.nif) : ''}</dd>
+            <dt>Veículos</dt><dd>${(l.vehicle_types || []).join(', ')}</dd>
+            <dt>Atributos</dt><dd>${[l.is_covered && 'coberto', l.is_underground && 'subterrâneo', l.is_closed && 'fechado', l.is_solo && 'só seu', l.easy_entry && 'acesso fácil', l.max_height_m && 'alt. ' + l.max_height_m + ' m'].filter(Boolean).join(', ') || '—'}</dd>
+            <dt>Carregador</dt><dd>${l.has_charger ? `${l.charger_type}${l.charger_kw ? ' ' + l.charger_kw + ' kW' : ''} · ${l.charge_price_mode === 'incluido' ? 'incluído' : PNC.euro(l.charge_price_kwh, '/kWh')}` : 'Não'}</dd>
+            <dt>Horário</dt><dd>${sched || '—'}</dd>
+            <dt>Reservas</dt><dd>${l.instant_book ? 'Instantâneas' : 'Com aprovação'}</dd>
+            <dt>Descrição</dt><dd style="font-weight:400">${esc(l.description || '—')}</dd>
+            <dt>Acesso</dt><dd style="font-weight:400">${esc(p.access_instructions || '—')}</dd>
+            ${l.rejection_reason ? `<dt>Motivo recusa</dt><dd>${esc(l.rejection_reason)}</dd>` : ''}
+          </dl></div>
+          <div class="rev-actions">
+            ${status !== 'ativo' ? `<button class="btn small" data-a="ok" data-id="${l.id}">Aprovar</button>` : ''}
+            ${status !== 'recusado' ? `<button class="btn small danger" data-a="no" data-id="${l.id}">${status === 'ativo' ? 'Retirar' : 'Recusar'}</button>` : ''}
+          </div>
+        </article>`;
+      }).join('');
+    }
+
+    $('content').onclick = async e => {
+      const b = e.target.closest('[data-a]'); if (!b) return;
+      let patch;
+      if (b.dataset.a === 'ok') patch = { status: 'ativo' };
+      else {
+        const reason = prompt('Motivo (o anfitrião vai ver esta mensagem):');
+        if (!reason || !reason.trim()) return;
+        patch = { status: 'recusado', rejection_reason: reason.trim() };
+      }
+      b.disabled = true;
+      const { error } = await db.from('listings').update(patch).eq('id', b.dataset.id);
+      if (error) { b.disabled = false; return PNC.toast(PNC.dbError(error), 'err'); }
+      PNC.toast(patch.status === 'ativo' ? 'Anúncio aprovado e publicado.' : 'Anúncio recusado.');
+      load();
+    };
+    $('filters').onclick = e => {
+      const c = e.target.closest('.chip'); if (!c) return;
+      status = c.dataset.s;
+      document.querySelectorAll('#filters .chip').forEach(x => x.classList.toggle('on', x === c));
+      load();
+    };
+
+    (async () => {
+      if (!db) { $('content').innerHTML = '<div class="msg err">Não foi possível ligar ao servidor.</div>'; return; }
+      const user = await PNC.requireLogin(); if (!user) return;
+      if (!(await PNC.isAdmin())) { $('content').innerHTML = '<div class="msg err">Esta página é só para administradores.</div>'; $('filters').classList.add('hidden'); return; }
+      load();
+    })();
+  </script>
+</body>
+</html>

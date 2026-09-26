@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Anfitrião — Parkncharge</title>
+  <meta name="theme-color" content="#436E91">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="page-top"><div class="wrap page"><h1 id="title">Os meus lugares</h1></div></div>
+  <main class="sheet">
+    <div class="page" id="content"><div class="spinner"></div></div>
+  </main>
+
+  <script src="assets/app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
+  <script>
+    const view = new URLSearchParams(location.search).get('v') || 'lugares';
+    const ACTIVE = { hoje: 'Hoje', calendario: 'Calendário', perfil: 'Menu' }[view] || 'Lugares';
+    PNC.renderChrome({ active: ACTIVE, host: true });
+    const $ = id => document.getElementById(id);
+    const c = $('content');
+    const db = PNC.db();
+    let user, hostProfile;
+
+    // ---------- Perfil de anfitrião (particular / empresa) ----------
+    function profileForm(first) {
+      $('title').textContent = first ? 'Tornar-se anfitrião' : 'Dados de anfitrião';
+      const hp = hostProfile || { host_type: 'particular' };
+      c.innerHTML = `
+        ${first ? '<h2>Bem-vindo ao modo anfitrião</h2><p class="muted">Antes de publicar o primeiro lugar, diga-nos quem vai arrendar.</p>' : ''}
+        <div id="msg" class="msg hidden"></div>
+        <div class="options" id="htype">
+          <button type="button" class="option" data-t="particular">${PNC.icon('user')}<span><b>Particular</b><small>Garagem ou lugar próprio</small></span></button>
+          <button type="button" class="option" data-t="empresa">${PNC.icon('garage')}<span><b>Empresa</b><small>Parque, hotel, escritório, condomínio…</small></span></button>
+        </div>
+        <div id="company" style="margin-top:20px">
+          <div class="field"><label for="cname">Nome da empresa</label><input class="input" id="cname" maxlength="120" value="${PNC.esc(hp.company_name || '')}"></div>
+        </div>
+        <div class="field" style="margin-top:8px"><label for="nif">NIF <span class="muted" style="font-weight:400">(opcional)</span></label><input class="input" id="nif" inputmode="numeric" maxlength="9" value="${PNC.esc(hp.nif || '')}"><div class="hint">9 algarismos. Será necessário mais tarde para faturação.</div></div>
+        <button class="btn block" id="save" type="button">${first ? 'Continuar' : 'Guardar'}</button>`;
+      let type = hp.host_type;
+      const paint = () => {
+        document.querySelectorAll('#htype .option').forEach(o => o.classList.toggle('on', o.dataset.t === type));
+        $('company').classList.toggle('hidden', type !== 'empresa');
+      };
+      paint();
+      $('htype').onclick = e => { const o = e.target.closest('.option'); if (o) { type = o.dataset.t; paint(); } };
+      $('save').onclick = async () => {
+        const m = $('msg'); m.className = 'msg hidden';
+        const nif = $('nif').value.trim();
+        const company = $('cname').value.trim();
+        if (nif && !/^\d{9}$/.test(nif)) { m.textContent = 'O NIF tem de ter 9 algarismos.'; m.className = 'msg err'; return; }
+        if (type === 'empresa' && !company) { m.textContent = 'Indique o nome da empresa.'; m.className = 'msg err'; return; }
+        $('save').disabled = true;
+        const row = { user_id: user.id, host_type: type, company_name: type === 'empresa' ? company : null, nif: nif || null };
+        const { data, error } = await db.from('host_profiles').upsert(row).select().single();
+        $('save').disabled = false;
+        if (error) { m.textContent = PNC.dbError(error); m.className = 'msg err'; return; }
+        hostProfile = data;
+        if (first) location.href = '/publicar.html';
+        else { PNC.toast('Dados guardados.'); }
+      };
+    }
+
+    // ---------- Lista de lugares ----------
+    async function listView() {
+      const { data, error } = await db.from('listings')
+        .select('id,title,zone,status,rejection_reason,cover_photo,price_hour,price_day,price_month,has_charger,updated_at')
+        .eq('host_id', user.id).order('updated_at', { ascending: false });
+      if (error) { c.innerHTML = `<div class="msg err">${PNC.dbError(error)}</div>`; return; }
+      const who = hostProfile.host_type === 'empresa' && hostProfile.company_name ? PNC.esc(hostProfile.company_name) : 'Particular';
+      c.innerHTML = `
+        <div class="section-head" style="margin-bottom:12px"><span class="muted">${who} · <a class="link" href="/anfitriao.html?v=perfil">alterar</a></span></div>
+        <a class="btn block orange" href="/publicar.html" style="margin-bottom:20px">${PNC.icon('plus')} Publicar um novo lugar</a>
+        ${data.length ? `<div class="host-list">${data.map(item).join('')}</div>`
+          : `<div class="empty-card"><strong>Ainda não tem lugares</strong>Publique o seu primeiro lugar em poucos minutos. Cada anúncio é revisto antes de ficar visível.</div>`}`;
+      c.onclick = onAction;
+    }
+    function item(l) {
+      const [label, cls] = PNC.STATUS[l.status] || [l.status, ''];
+      const photo = PNC.photoUrl(l.cover_photo);
+      const price = PNC.mainPrice(l);
+      const btn = (act, text, extra = 'ghost') => `<button class="btn small ${extra}" type="button" data-act="${act}" data-id="${l.id}">${text}</button>`;
+      let actions = '';
+      if (l.status === 'rascunho') actions = `<a class="btn small" href="/publicar.html?id=${l.id}">Continuar</a>` + btn('del', 'Apagar', 'danger');
+      else if (l.status === 'pendente') actions = `<a class="btn small ghost" href="/publicar.html?id=${l.id}&passo=rever">Ver</a>` + btn('draft', 'Retirar da análise');
+      else if (l.status === 'recusado') actions = `<a class="btn small" href="/publicar.html?id=${l.id}">Corrigir e reenviar</a>` + btn('del', 'Apagar', 'danger');
+      else if (l.status === 'ativo') actions = `<a class="btn small ghost" href="/publicar.html?id=${l.id}">Editar</a>` + btn('pause', 'Pausar');
+      else if (l.status === 'pausado') actions = btn('resume', 'Reativar', '') + `<a class="btn small ghost" href="/publicar.html?id=${l.id}">Editar</a>`;
+      return `<div class="host-item">
+        <div class="thumb" style="${photo ? `background-image:url('${photo}')` : ''}">${photo ? '' : PNC.icon('garage')}</div>
+        <div class="info">
+          <h3>${PNC.esc(l.title || 'Lugar sem título')}</h3>
+          <span class="status ${cls}">${label}</span>
+          <div class="muted" style="font-size:14px">${PNC.esc(l.zone || 'Sem zona')}${price ? ' · ' + price : ''}${l.has_charger ? ' · ⚡' : ''}</div>
+          ${l.status === 'recusado' && l.rejection_reason ? `<div class="msg err" style="margin:8px 0 0;padding:8px 10px;font-size:14px">Motivo: ${PNC.esc(l.rejection_reason)}</div>` : ''}
+          ${l.status === 'pendente' ? '<div class="muted" style="font-size:13px;margin-top:4px">Normalmente revisto em 24–48 h.</div>' : ''}
+          <div class="actions">${actions}</div>
+        </div>
+      </div>`;
+    }
+    async function onAction(e) {
+      const b = e.target.closest('[data-act]'); if (!b) return;
+      const id = b.dataset.id, act = b.dataset.act;
+      if (act === 'del') {
+        if (!confirm('Apagar este lugar? Esta ação não pode ser desfeita.')) return;
+        const { data: photos } = await db.from('listing_photos').select('storage_path').eq('listing_id', id);
+        const { error } = await db.from('listings').delete().eq('id', id);
+        if (error) return PNC.toast(PNC.dbError(error), 'err');
+        if (photos && photos.length) await plataforma.storage.from(PNC.BUCKET).remove(photos.map(p => p.storage_path));
+        PNC.toast('Lugar apagado.');
+      } else {
+        const status = { pause: 'pausado', resume: 'ativo', draft: 'rascunho' }[act];
+        const { error } = await db.from('listings').update({ status }).eq('id', id);
+        if (error) return PNC.toast(PNC.dbError(error), 'err');
+        PNC.toast({ pausado: 'Lugar pausado: deixou de aparecer nas pesquisas.', ativo: 'Lugar reativado.', rascunho: 'Retirado da análise. Pode editar e reenviar.' }[status]);
+      }
+      listView();
+    }
+
+    (async () => {
+      if (!db) { c.innerHTML = '<div class="msg err">Não foi possível ligar ao servidor.</div>'; return; }
+      user = await PNC.requireLogin(); if (!user) return;
+      if (view === 'hoje' || view === 'calendario') {
+        $('title').textContent = view === 'hoje' ? 'Hoje' : 'Calendário';
+        c.innerHTML = `<div class="empty-card"><strong>${view === 'hoje' ? 'Sem reservas para hoje' : 'Calendário de reservas'}</strong>${view === 'hoje' ? 'As chegadas e saídas do dia aparecem aqui' : 'A disponibilidade e as reservas de cada lugar aparecem aqui'} quando as reservas estiverem ativas (v0.4).</div>`;
+        return;
+      }
+      const { data } = await db.from('host_profiles').select('*').eq('user_id', user.id).maybeSingle();
+      hostProfile = data;
+      if (!hostProfile) return profileForm(true);
+      if (view === 'perfil') return profileForm(false);
+      listView();
+    })();
+  </script>
+</body>
+</html>

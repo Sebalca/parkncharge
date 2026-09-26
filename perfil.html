@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Perfil — Parkncharge</title>
+  <meta name="theme-color" content="#436E91">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="page-top"><div class="wrap page"><h1 id="title">Perfil</h1></div></div>
+  <main class="sheet">
+    <div class="page" id="content"><div class="spinner"></div></div>
+  </main>
+
+  <script src="assets/app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
+  <script>
+    const host = new URLSearchParams(location.search).get('modo') === 'anfitriao';
+    PNC.renderChrome({ active: host ? 'Menu' : 'Perfil', host });
+    const $ = id => document.getElementById(id);
+    const I = PNC.icon;
+    const item = (href, ic, label, extra = '') => `<li><a href="${href}" ${extra}>${I(ic)}<span>${label}</span>${I('chev', 'chev')}</a></li>`;
+
+    (async () => {
+      const user = await PNC.currentUser();
+      if (!user) {
+        $('content').innerHTML = `
+          <h2>O seu perfil</h2>
+          <p class="muted">Entre para reservar lugares, guardar favoritos e falar com anfitriões. A conta é a mesma em todos os sites frisk.pt.</p>
+          <a class="btn block" href="/login.html?next=/perfil.html">Entrar ou criar conta</a>
+          <hr class="divider">
+          <ul class="menu-list">
+            ${item('/anfitriao.html', 'garage', 'Arrendar o meu lugar')}
+            ${item('/ajuda.html', 'help', 'Centro de ajuda')}
+          </ul>`;
+        return;
+      }
+      const { nome, avatar } = await PNC.displayName(user);
+      const admin = await PNC.isAdmin();
+      const initial = (nome || '?').trim().charAt(0).toUpperCase();
+      $('content').innerHTML = `
+        <div class="profile-card">
+          <div class="avatar" style="${avatar ? `background-image:url('${PNC.esc(avatar)}');color:transparent` : ''}">${PNC.esc(initial)}</div>
+          <div><h2>${PNC.esc(nome)}</h2><div class="muted">${PNC.esc(user.email)}</div></div>
+        </div>
+        ${host
+          ? `<a class="switch-mode" href="/">${I('swap')} Mudar para condutor</a>`
+          : `<a class="switch-mode" href="/anfitriao.html">${I('swap')} Mudar para anfitrião</a>`}
+        <ul class="menu-list">
+          ${host ? item('/anfitriao.html', 'garage', 'Os meus lugares') + item('/anfitriao.html?v=perfil', 'user', 'Dados de anfitrião') + item('/publicar.html', 'plus', 'Publicar um novo lugar')
+                 : item('/reservas.html', 'bookings', 'As minhas reservas') + item('/favoritos.html', 'heart', 'Favoritos')}
+          ${admin ? item('/admin.html', 'shield', 'Aprovação de anúncios') : ''}
+          ${item('/ajuda.html', 'help', 'Centro de ajuda')}
+          <li><button id="logout" type="button">${I('logout')}<span>Terminar sessão</span></button></li>
+        </ul>
+        <p class="muted" style="font-size:13px;margin-top:20px">Nome e fotografia são os da sua conta frisk.pt.</p>`;
+      $('logout').onclick = async () => { await Auth.signOut(); location.replace('/'); };
+    })();
+  </script>
+</body>
+</html>

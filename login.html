@@ -14,13 +14,13 @@
 </head>
 <body>
   <div class="app">
-    <header class="top-title">
-      <a class="back" href="/" aria-label="Voltar">‹</a>
+    <div class="page-top center-title"><div class="wrap page">
+      <a class="back" href="/" aria-label="Voltar" data-icon="back"></a>
       <h1 id="title">Entrar</h1>
       <span style="width:36px"></span>
-    </header>
+    </div></div>
 
-    <main class="sheet">
+    <main class="sheet"><div class="page">
       <div id="msg" class="msg hidden" role="status"></div>
 
       <!-- Formulário entrar / criar conta -->
@@ -77,18 +77,17 @@
         <h2>A sua conta</h2>
         <p class="muted">Sessão iniciada como <strong id="acc-email"></strong>.</p>
         <p class="muted">Perfil, os meus lugares e reservas chegam nas próximas versões.</p>
-        <a class="btn block" href="/" style="margin:12px 0">Ir para o início</a>
+        <a class="btn block" href="/perfil.html" style="margin:12px 0">Ir para o perfil</a>
         <div class="center"><button class="text-btn" id="logout" type="button">Terminar sessão</button></div>
       </section>
-    </main>
+    </div></main>
   </div>
 
   <script src="assets/app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
   <script>
-    document.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = PNC.icon(el.dataset.icon));
-    PNC.renderNav('user');
+    PNC.renderChrome({ active: 'Perfil', footer: false });
 
     const $ = id => document.getElementById(id);
     const params = new URLSearchParams(location.search);
@@ -148,8 +147,7 @@
       (async () => {
         const user = await Auth.getUser();
         if (user && !location.hash.includes('type=recovery')) {
-          if (params.get('next')) { location.replace(next); return; }
-          showAccount(user);
+          location.replace(params.get('next') ? next : '/perfil.html');
         }
       })();
 

@@ -13,6 +13,10 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 - Língua: só português (PT) por agora.
 - Login: email + Google (conta frisk.pt partilhada). Sem ecrã de arranque.
 - Sem conta pode-se ver tudo; a conta só é pedida para reservar ou para publicar um lugar.
+- Estrutura inspirada no Airbnb (organização e fluxos, não o aspeto): pesquisa Onde · Início–Fim · Veículo, barra de categorias, carrosséis por zona, barra inferior Explorar / Favoritos / Reservas / Mensagens / Perfil, modo anfitrião separado.
+- Carregador é categoria/filtro (sem separador próprio).
+- Anúncios com aprovação manual; empresas: nome + NIF opcional; 1 a 6 fotos; morada exata só após reserva confirmada.
+- Serviços extra "Clean Up" (lavagem) e "Workshop" (oficina): depois da v1.0.
 
 > Antes de cada versão: perguntas e sugestões para fechar o âmbito. Só depois se implementa.
 
@@ -26,13 +30,16 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 - [x] Home provisória (saudação, localização, "Perto de si", convite a anfitriões)
 - [x] Login/registo com email + Google, recuperação de palavra-passe, terminar sessão (`auth.js` do `plataforma-core`)
 - [x] Registo do site na tabela `sites` do Supabase
+- [x] v0.1.1 — reestruturação à Airbnb (início, pesquisa, categorias, perfil, rodapé, páginas de ajuda)
 
 ## v0.2 — Anúncios (lado do anfitrião)
-- [ ] Schema `parkncharge` com RLS: `host_profiles`, `listings`, `listing_photos`, `listing_schedule`
-- [ ] Perfil de anfitrião: particular ou empresa (NIF opcional)
-- [ ] Criar/editar lugar: morada + ponto no mapa, fotos (Storage), veículos aceites, categorias (solo, subterrâneo, fechado, carregador, acesso fácil), horário semanal, preços hora/dia/mês
-- [ ] Carregamento elétrico: tipo de tomada, potência, preço da carga (incluído ou à parte)
-- [ ] "Renting Address" = lista dos meus lugares
+- [x] Schema `parkncharge` com RLS: `host_profiles`, `listings`, `listing_private`, `listing_photos`, `listing_schedule` + bucket `parkncharge`
+- [x] Perfil de anfitrião: particular ou empresa (NIF opcional)
+- [x] Modo anfitrião (Hoje, Calendário, Lugares, Mensagens, Menu) com "Mudar para anfitrião/condutor"
+- [x] Assistente de publicação em 9 passos: tipo, localização (mapa + pesquisa de morada), características, carregador, fotos (1–6, comprimidas), título, horário, preços, rever e enviar
+- [x] Aprovação manual (`admin.html`): aprovar, recusar com motivo, retirar
+- [x] Morada exata privada; no site só a posição aproximada (~300 m) e a zona
+- [x] Lugares aprovados aparecem no início, agrupados por zona
 
 ## v0.3 — Home e pesquisa (lado do condutor)
 - [ ] Home "Close to you": mapa (Leaflet + OpenStreetMap) com pinos e tempo a pé, lista em cartões

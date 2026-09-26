@@ -1,6 +1,6 @@
 # Modelo de dados — Parkncharge (proposta)
 
-Projeto Supabase partilhado da plataforma. Os dados do Parkncharge ficam num **schema próprio `parkncharge`**,
+Projeto Supabase partilhado da plataforma ("Sites"). SQL em [`supabase/migrations/`](../supabase/migrations/). Os dados do Parkncharge ficam num **schema próprio `parkncharge`**,
 separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque são dados partilhados entre utilizadores
 (anúncios públicos, reservas com dois lados).
 
@@ -10,9 +10,20 @@ separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque
 | Nome, email, avatar, telefone | `public.profiles` (global, reutilizável) |
 | Tipo de anfitrião, NIF, dados de empresa | `parkncharge.host_profiles` |
 | Lugares, fotos, horários, preços | `parkncharge.listings`, `listing_photos`, `listing_schedule` |
+| Morada exata, coordenadas, instruções de acesso | `parkncharge.listing_private` (só dono/admin) |
 | Reservas, mensagens, avaliações, favoritos | `parkncharge.bookings`, `messages`, `reviews`, `favorites` |
 
-## Tabelas (rascunho — fechado em cada versão)
+## Estado
+- v0.2 (aplicado): `host_profiles`, `listings`, `listing_private`, `listing_photos`, `listing_schedule`, bucket `parkncharge`.
+- A seguir: `bookings` (v0.4), `messages` (v0.5), `reviews` e `favorites` (v0.6).
+
+## Regras nos triggers (v0.2)
+- O anfitrião nunca se auto-aprova: só pode passar rascunho/recusado → pendente, pendente → rascunho, ativo ↔ pausado.
+- Ao enviar (→ pendente) o servidor verifica: título, tipo, zona, pelo menos um preço, morada, pelo menos 1 foto, dados do carregador se tiver.
+- Máximo 6 fotos; a primeira (menor `position`) é a capa.
+- `approx_lat/lng` é calculado no servidor a partir da morada privada (grelha de ~300 m).
+
+## Tabelas
 - **host_profiles** — `user_id` (PK, → auth.users), `host_type` (particular/empresa), `company_name`, `nif`, `created_at`
 - **listings** — `id`, `host_id`, `title`, `address`, `location` (geography Point, PostGIS), `description`,
   `vehicle_types[]` (moto, carro, carrinha, autocarro, camião, autocaravana),

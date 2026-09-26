@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Parkncharge</title>
-  <meta name="description" content="Encontre e reserve lugares de estacionamento — com ou sem carregamento elétrico — no Porto.">
+  <title>Parkncharge — estacionamento e carregamento no Porto</title>
+  <meta name="description" content="Encontre e reserve lugares de estacionamento — à hora, ao dia ou ao mês, com ou sem carregamento elétrico — no Porto.">
   <meta name="theme-color" content="#436E91">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,81 +13,219 @@
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  <div class="app">
-    <header class="top">
-      <div class="top-bar">
-        <label class="search">
-          <input id="loc" type="text" placeholder="A sua localização" autocomplete="off" aria-label="Localização">
-          <button class="icon-btn" id="locate" type="button" aria-label="Usar a minha localização" data-icon="target"></button>
-        </label>
-        <button class="icon-btn light" type="button" aria-label="Filtros" data-icon="sliders" onclick="document.getElementById('soon').scrollIntoView({behavior:'smooth'})"></button>
-      </div>
-      <h1 id="hello">Olá</h1>
-      <p class="sub">Estacione com facilidade, arrende sem complicações.</p>
-    </header>
+  <section class="hero">
+    <div class="hero-inner">
+      <button class="searchbar" id="open-search" type="button" aria-label="Pesquisar lugares">
+        <span class="sb-text"><span class="sb-main" id="sb-main">Onde vai estacionar?</span><span class="sb-sub" id="sb-sub">Qualquer altura · Carro</span></span>
+        <span class="sb-fields"><span><b>Onde</b><em id="f-where">Pesquisar zona</em></span><span><b>Quando</b><em id="f-when">Qualquer altura</em></span><span><b>Veículo</b><em id="f-veh">Carro</em></span></span>
+        <span class="sb-go" data-icon="search"></span>
+      </button>
+      <div class="cats" id="cats" role="tablist" aria-label="Categorias"></div>
+    </div>
+  </section>
 
-    <main class="sheet">
-      <h2 id="mapa">Perto de si</h2>
-      <div class="map-card" id="soon">
-        <div><strong>Mapa em breve</strong>Estamos a reunir os primeiros lugares no Porto.</div>
-      </div>
+  <main class="sheet">
+    <div class="sheet-inner" id="content">
+      <div class="spinner" aria-label="A carregar"></div>
+    </div>
+
+    <div class="sheet-inner">
+      <section class="section host-cta">
+        <h3>Tem um lugar ou garagem livre?</h3>
+        <p>Arrende-o à hora, ao dia ou ao mês e ganhe com o espaço que não usa. Com carregador, ainda melhor.</p>
+        <a class="btn small" href="/anfitriao.html">Arrendar o meu lugar</a>
+      </section>
 
       <hr class="divider">
 
-      <div class="section-head">
-        <h2>Lugares</h2>
-      </div>
-      <div class="grid" aria-hidden="true">
-        <div class="spot-card" data-icon="garage"></div>
-        <div class="spot-card" data-icon="garage"></div>
-      </div>
-      <p class="empty">Ainda não há lugares publicados.</p>
-
-      <section class="host-cta">
-        <h3>Tem um lugar ou garagem livre?</h3>
-        <p>Arrende-o à hora, ao dia ou ao mês. Crie conta para ser dos primeiros anfitriões no Porto.</p>
-        <a class="btn small" id="host-btn" href="login.html?modo=registo&next=/">Quero arrendar o meu lugar</a>
+      <section class="section">
+        <h2>Estacionar no Porto</h2>
+        <div class="zones" id="zones"></div>
       </section>
-    </main>
+    </div>
+  </main>
+
+  <!-- Painel de pesquisa -->
+  <div class="search-panel hidden" id="panel" role="dialog" aria-modal="true" aria-label="Pesquisa">
+    <div class="panel-card">
+      <div class="panel-head">
+        <button class="icon-btn" id="close-search" type="button" aria-label="Fechar" data-icon="close"></button>
+        <b>Pesquisa</b><span style="width:40px"></span>
+      </div>
+      <div class="search-box">
+        <h3>Onde?</h3>
+        <div class="input-wrap">
+          <input class="input" id="where" list="zone-list" placeholder="Zona, rua ou local (ex.: Boavista)" autocomplete="off">
+          <button class="icon-btn eye" id="locate" type="button" aria-label="Usar a minha localização" data-icon="target"></button>
+        </div>
+        <datalist id="zone-list"></datalist>
+      </div>
+      <div class="search-box">
+        <h3>Quando?</h3>
+        <div class="field"><label for="start">Início</label><input class="input" id="start" type="datetime-local"></div>
+        <div class="field" style="margin:0"><label for="end">Fim</label><input class="input" id="end" type="datetime-local"></div>
+      </div>
+      <div class="search-box">
+        <h3>Veículo</h3>
+        <div class="chips" id="veh"></div>
+      </div>
+      <div class="search-actions">
+        <button class="text-btn" id="clear" type="button">Limpar tudo</button>
+        <button class="btn orange" id="do-search" type="button"><span data-icon="search"></span>Pesquisar</button>
+      </div>
+    </div>
   </div>
 
   <script src="assets/app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
   <script>
-    document.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = PNC.icon(el.dataset.icon));
-    PNC.renderNav('home');
+    PNC.renderChrome({ active: 'Explorar' });
+    const $ = id => document.getElementById(id);
 
-    const hello = document.getElementById('hello');
-    hello.textContent = PNC.greeting();
+    // ---------- Estado da pesquisa (na URL, para partilhar) ----------
+    const qs = new URLSearchParams(location.search);
+    const state = {
+      cat: qs.get('cat') || 'todos',
+      where: qs.get('onde') || '',
+      start: qs.get('inicio') || '',
+      end: qs.get('fim') || '',
+      veh: qs.get('veiculo') || 'carro',
+      near: null,
+    };
+    function syncUrl() {
+      const p = new URLSearchParams();
+      if (state.cat !== 'todos') p.set('cat', state.cat);
+      if (state.where) p.set('onde', state.where);
+      if (state.start) p.set('inicio', state.start);
+      if (state.end) p.set('fim', state.end);
+      if (state.veh !== 'carro') p.set('veiculo', state.veh);
+      history.replaceState(null, '', p.toString() ? '?' + p : location.pathname);
+    }
+    const fmtDate = s => s ? new Date(s).toLocaleString('pt-PT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    function renderSummary() {
+      const vehLabel = (PNC.VEHICLES.find(v => v[0] === state.veh) || [, 'Carro'])[1];
+      const when = state.start ? `${fmtDate(state.start)}${state.end ? ' – ' + fmtDate(state.end) : ''}` : 'Qualquer altura';
+      $('sb-main').textContent = state.where || (state.near ? 'Perto de mim' : 'Onde vai estacionar?');
+      $('sb-sub').textContent = `${when} · ${vehLabel}`;
+      $('f-where').textContent = state.where || (state.near ? 'Perto de mim' : 'Pesquisar zona');
+      $('f-when').textContent = when;
+      $('f-veh').textContent = vehLabel;
+    }
 
-    // Localização atual (só preenche o campo na v0.1; pesquisa por proximidade chega na v0.3)
-    document.getElementById('locate').addEventListener('click', () => {
-      const loc = document.getElementById('loc');
-      if (!navigator.geolocation) { loc.value = 'Localização indisponível'; return; }
-      loc.value = 'A localizar…';
-      navigator.geolocation.getCurrentPosition(
-        p => loc.value = `${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}`,
-        () => loc.value = ''
-      );
+    // ---------- Categorias ----------
+    $('cats').innerHTML = PNC.CATEGORIES.map(c =>
+      `<button class="cat ${c.id === state.cat ? 'on' : ''}" data-cat="${c.id}" role="tab" aria-selected="${c.id === state.cat}">${PNC.icon(c.icon)}<span>${c.label}</span></button>`
+    ).join('');
+    $('cats').addEventListener('click', e => {
+      const b = e.target.closest('.cat'); if (!b) return;
+      state.cat = b.dataset.cat;
+      document.querySelectorAll('.cat').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b); });
+      syncUrl(); render();
     });
 
-    // Sessão: saudação com nome e botão de anfitrião adaptado
+    // ---------- Zonas (inspiração) ----------
+    $('zones').innerHTML = PNC.ZONES.map(z => `<a href="/?onde=${encodeURIComponent(z)}">${z}<span>Estacionamento</span></a>`).join('');
+    $('zone-list').innerHTML = PNC.ZONES.map(z => `<option value="${z}">`).join('');
+
+    // ---------- Painel de pesquisa ----------
+    $('veh').innerHTML = PNC.VEHICLES.map(([id, label]) => `<button class="chip" type="button" data-v="${id}">${label}</button>`).join('');
+    function openPanel() {
+      $('where').value = state.where; $('start').value = state.start; $('end').value = state.end;
+      document.querySelectorAll('#veh .chip').forEach(c => c.classList.toggle('on', c.dataset.v === state.veh));
+      $('panel').classList.remove('hidden'); $('where').focus();
+    }
+    $('open-search').onclick = openPanel;
+    $('close-search').onclick = () => $('panel').classList.add('hidden');
+    $('veh').onclick = e => { const c = e.target.closest('.chip'); if (!c) return; document.querySelectorAll('#veh .chip').forEach(x => x.classList.toggle('on', x === c)); };
+    $('clear').onclick = () => { $('where').value = ''; $('start').value = ''; $('end').value = ''; state.near = null; document.querySelectorAll('#veh .chip').forEach(x => x.classList.toggle('on', x.dataset.v === 'carro')); };
+    $('locate').onclick = () => {
+      if (!navigator.geolocation) return PNC.toast('Localização indisponível neste dispositivo.', 'err');
+      navigator.geolocation.getCurrentPosition(
+        p => { state.near = { lat: p.coords.latitude, lng: p.coords.longitude }; $('where').value = ''; $('where').placeholder = 'Perto de mim'; PNC.toast('Localização obtida.'); },
+        () => PNC.toast('Não foi possível obter a localização.', 'err'));
+    };
+    $('do-search').onclick = () => {
+      state.where = $('where').value.trim();
+      state.start = $('start').value; state.end = $('end').value;
+      if (state.start && state.end && state.end <= state.start) return PNC.toast('O fim tem de ser depois do início.', 'err');
+      const v = document.querySelector('#veh .chip.on'); state.veh = v ? v.dataset.v : 'carro';
+      $('panel').classList.add('hidden');
+      syncUrl(); renderSummary(); render();
+    };
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') $('panel').classList.add('hidden'); });
+
+    // ---------- Lugares ----------
+    let listings = [];
+    function card(l) {
+      const photo = PNC.photoUrl(l.cover_photo);
+      const dist = state.near && l.approx_lat ? ' · ' + PNC.walkText(PNC.distance(state.near, { lat: l.approx_lat, lng: l.approx_lng })) : '';
+      const extra = l.has_charger ? `Carregador ${l.charger_kw ? l.charger_kw + ' kW' : ''}` : (l.is_covered ? 'Coberto' : 'Descoberto');
+      return `<div class="card">
+        <div class="card-photo" style="${photo ? `background-image:url('${photo}')` : ''}">
+          ${photo ? '' : PNC.icon('garage')}
+          ${l.has_charger ? `<span class="card-badge">${PNC.icon('bolt')} Carregador</span>` : ''}
+          <button class="card-fav" type="button" aria-label="Guardar nos favoritos" data-fav="${l.id}">${PNC.icon('heart')}</button>
+        </div>
+        <div class="card-body">
+          <div class="card-row"><span class="card-title">${PNC.esc(l.title)}</span><span class="card-rating">${PNC.icon('star')} Novo</span></div>
+          <div class="card-sub">${PNC.esc(l.zone)}${dist}</div>
+          <div class="card-sub">${PNC.esc(extra)}</div>
+          <div class="card-price"><b>${PNC.mainPrice(l)}</b></div>
+        </div>
+      </div>`;
+    }
+    function applyFilters() {
+      const cat = PNC.CATEGORIES.find(c => c.id === state.cat);
+      let out = listings.filter(l => (l.vehicle_types || ['carro']).includes(state.veh));
+      if (cat && cat.match) out = out.filter(cat.match);
+      if (state.where) {
+        const w = state.where.toLowerCase();
+        out = out.filter(l => (l.zone || '').toLowerCase().includes(w) || (l.title || '').toLowerCase().includes(w));
+      }
+      if (state.near) out.sort((a, b) => PNC.distance(state.near, { lat: a.approx_lat, lng: a.approx_lng }) - PNC.distance(state.near, { lat: b.approx_lat, lng: b.approx_lng }));
+      return out;
+    }
+    function render() {
+      const list = applyFilters();
+      const content = $('content');
+      if (!listings.length) {
+        content.innerHTML = `<section class="section"><h2>Perto de si</h2><div class="empty-card"><strong>Os primeiros lugares estão a chegar</strong>Estamos a reunir anfitriões no Porto. Tem um lugar livre? Seja dos primeiros a publicar.</div></section>`;
+        return;
+      }
+      if (!list.length) {
+        content.innerHTML = `<section class="section"><h2>Sem resultados</h2><div class="empty-card"><strong>Nenhum lugar corresponde à pesquisa</strong>Experimente outra zona, categoria ou veículo.</div></section>`;
+        return;
+      }
+      // Pesquisa/categoria ativa → grelha; caso contrário → carrosséis por zona (como no Airbnb)
+      if (state.where || state.cat !== 'todos' || state.near) {
+        content.innerHTML = `<section class="section"><div class="section-head"><h2>${list.length} ${list.length === 1 ? 'lugar' : 'lugares'}${state.where ? ' em ' + PNC.esc(state.where) : ''}</h2></div><div class="grid-cards">${list.map(card).join('')}</div></section>`;
+        return;
+      }
+      const byZone = {};
+      list.forEach(l => (byZone[l.zone] = byZone[l.zone] || []).push(l));
+      const zones = Object.keys(byZone).sort((a, b) => byZone[b].length - byZone[a].length);
+      content.innerHTML = zones.map(z => `
+        <section class="section">
+          <div class="section-head"><h2>Lugares em ${PNC.esc(z)}</h2><a href="/?onde=${encodeURIComponent(z)}">Ver todos ›</a></div>
+          <div class="rail">${byZone[z].slice(0, 10).map(card).join('')}</div>
+        </section>`).join('');
+    }
+    document.addEventListener('click', e => {
+      const f = e.target.closest('[data-fav]'); if (!f) return;
+      e.preventDefault(); f.classList.toggle('on');
+      PNC.toast('Os favoritos ficam guardados na conta a partir da v0.6.');
+    });
+
     (async () => {
-      if (!window.Auth) return; // sem ligação: página funciona na mesma
-      const user = await Auth.getUser();
-      if (!user) return;
-      let nome = (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name)) || '';
-      try {
-        const { data } = await plataforma.from('profiles').select('nome').eq('id', user.id).maybeSingle();
-        if (data && data.nome) nome = data.nome;
-      } catch (e) {}
-      if (nome) hello.textContent = `${PNC.greeting()}, ${nome.split(' ')[0]}`;
-      const hb = document.getElementById('host-btn');
-      hb.textContent = 'Publicar lugar (em breve)';
-      hb.removeAttribute('href');
-      hb.setAttribute('aria-disabled', 'true');
-      hb.style.opacity = .7;
+      renderSummary();
+      const db = PNC.db();
+      if (!db) { listings = []; render(); return; }
+      const { data, error } = await db.from('listings')
+        .select('id,title,zone,approx_lat,approx_lng,cover_photo,vehicle_types,is_covered,is_underground,is_closed,is_solo,easy_entry,has_charger,charger_kw,price_hour,price_day,price_month')
+        .eq('status', 'ativo').order('approved_at', { ascending: false }).limit(200);
+      listings = error ? [] : data;
+      render();
     })();
   </script>
 </body>

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Publicar lugar — Parkncharge</title>
+  <meta name="theme-color" content="#436E91">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body class="no-nav">
+  <div class="page-top"><div class="wrap page">
+    <a class="back" href="/anfitriao.html" aria-label="Sair do assistente" data-icon="close"></a>
+    <h1 id="title">Publicar lugar</h1>
+  </div></div>
+  <main class="sheet">
+    <div class="wizard">
+      <div class="progress" aria-hidden="true"><span id="bar" style="width:0"></span></div>
+      <div id="msg" class="msg hidden" role="alert"></div>
+      <div id="step"><div class="spinner"></div></div>
+    </div>
+  </main>
+  <div class="wizard-bar"><div class="wrap">
+    <button class="text-btn" id="prev" type="button">Anterior</button>
+    <button class="btn" id="next" type="button">Seguinte</button>
+  </div></div>
+
+  <script src="assets/app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    PNC.renderChrome({ active: 'Lugares', host: true, footer: false });
+    const $ = id => document.getElementById(id);
+    const I = PNC.icon, esc = PNC.esc;
+    const db = PNC.db();
+    const qs = new URLSearchParams(location.search);
+
+    let user, L0 = {}, P0 = null, photos = [], schedule = [], idx = 0;
+    const STEPS = ['tipo', 'localizacao', 'caracteristicas', 'carregador', 'fotos', 'titulo', 'horario', 'precos', 'rever'];
+
+    function err(text) { const m = $('msg'); m.textContent = text; m.className = 'msg err'; m.scrollIntoView({ block: 'nearest' }); }
+    function clearErr() { $('msg').className = 'msg hidden'; }
+    function head(n, title, lead) {
+      return `<p class="step-kicker">Passo ${n} de ${STEPS.length}</p><h2>${title}</h2>${lead ? `<p class="lead">${lead}</p>` : ''}`;
+    }
+    const sw = (id, label, sub, on) => `<label class="switch-row"><span><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</span><span class="switch"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><span></span></span></label>`;
+    const num = v => v === '' || v == null ? null : Number(String(v).replace(',', '.'));
+
+    // ---------- Guardar ----------
+    async function saveListing(patch) {
+      if (!L0.id) {
+        const { data, error } = await db.from('listings').insert({ ...patch, host_id: user.id }).select().single();
+        if (error) throw error;
+        L0 = data;
+        history.replaceState(null, '', '?id=' + data.id);
+      } else {
+        const { data, error } = await db.from('listings').update(patch).eq('id', L0.id).select().single();
+        if (error) throw error;
+        L0 = data;
+      }
+    }
+
+    // ---------- Passos ----------
+    const R = {}; // render
+    const S = {}; // save (devolve false se inválido)
+
+    R.tipo = () => head(1, 'Que tipo de lugar vai arrendar?', 'Escolha a opção que melhor descreve o espaço.') +
+      `<div class="options" id="types">${PNC.SPOT_TYPES.map(([id, t, d]) =>
+        `<button type="button" class="option ${L0.spot_type === id ? 'on' : ''}" data-v="${id}">${I(id === 'lugar_descoberto' ? 'target' : id === 'parque' ? 'all' : id === 'box' ? 'lock' : id === 'lugar_coberto' ? 'roof' : 'garage')}<span><b>${t}</b><small>${d}</small></span></button>`).join('')}</div>`;
+    R.tipo.after = () => $('types').onclick = e => {
+      const o = e.target.closest('.option'); if (!o) return;
+      document.querySelectorAll('#types .option').forEach(x => x.classList.toggle('on', x === o));
+    };
+    S.tipo = async () => {
+      const o = document.querySelector('#types .option.on');
+      if (!o) return err('Escolha um tipo de lugar.'), false;
+      const t = o.dataset.v;
+      const patch = { spot_type: t };
+      if (!L0.id) Object.assign(patch, { is_covered: ['garagem', 'box', 'lugar_coberto'].includes(t), is_closed: ['garagem', 'box'].includes(t), is_solo: ['garagem', 'box'].includes(t) });
+      await saveListing(patch);
+    };
+
+    // Localização
+    let map, marker, pos = null, geo = {};
+    R.localizacao = () => head(2, 'Onde fica o lugar?', 'A morada exata só é mostrada ao condutor depois de a reserva ser confirmada. No site aparece apenas a zona aproximada.') + `
+      <div class="field"><label for="addr">Morada</label>
+        <div class="input-wrap"><input class="input" id="addr" autocomplete="street-address" placeholder="Rua, número, localidade" value="${esc(P0 ? P0.address : '')}">
+        <button class="icon-btn eye on" id="find" type="button" aria-label="Procurar morada">${I('search')}</button></div>
+        <ul class="suggestions hidden" id="sugg"></ul>
+      </div>
+      <div class="map" id="map" aria-label="Mapa: arraste o marcador para o sítio exato"></div>
+      <p class="hint">Arraste o marcador para a entrada do lugar.</p>
+      <div class="row2">
+        <div class="field"><label for="cp">Código postal</label><input class="input" id="cp" inputmode="numeric" placeholder="4000-000" maxlength="8" value="${esc(P0 ? P0.postal_code || '' : '')}"></div>
+        <div class="field"><label for="zone">Zona</label><input class="input" id="zone" list="zones" placeholder="Ex.: Boavista" value="${esc(L0.zone || '')}"><datalist id="zones">${PNC.ZONES.map(z => `<option value="${z}">`).join('')}</datalist></div>
+      </div>`;
+    R.localizacao.after = () => {
+      pos = P0 ? { lat: P0.lat, lng: P0.lng } : null;
+      const start = pos || { lat: 41.1579, lng: -8.6291 };
+      map = window.L.map('map', { scrollWheelZoom: false }).setView([start.lat, start.lng], pos ? 17 : 13);
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+      const icon = window.L.divIcon({ className: '', html: `<svg width="34" height="44" viewBox="0 0 34 44"><path d="M17 43s15-15 15-26A15 15 0 0 0 2 17c0 11 15 26 15 26z" fill="#E95322" stroke="#fff" stroke-width="2"/><circle cx="17" cy="17" r="6" fill="#fff"/></svg>`, iconSize: [34, 44], iconAnchor: [17, 43] });
+      marker = window.L.marker([start.lat, start.lng], { draggable: true, icon }).addTo(map);
+      if (!pos) marker.setOpacity(.5);
+      marker.on('dragend', () => { const ll = marker.getLatLng(); pos = { lat: ll.lat, lng: ll.lng }; marker.setOpacity(1); });
+      map.on('click', e => { marker.setLatLng(e.latlng); pos = { lat: e.latlng.lat, lng: e.latlng.lng }; marker.setOpacity(1); });
+      const search = async () => {
+        const q = $('addr').value.trim(); if (q.length < 4) return;
+        $('sugg').innerHTML = '<li><button type="button" disabled>A procurar…</button></li>'; $('sugg').classList.remove('hidden');
+        try {
+          const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=pt&limit=5&accept-language=pt&q=${encodeURIComponent(q)}`);
+          const res = await r.json();
+          if (!res.length) { $('sugg').innerHTML = '<li><button type="button" disabled>Sem resultados. Coloque o marcador no mapa.</button></li>'; return; }
+          $('sugg').innerHTML = res.map((x, i) => `<li><button type="button" data-i="${i}">${esc(x.display_name)}</button></li>`).join('');
+          $('sugg').onclick = e => {
+            const b = e.target.closest('[data-i]'); if (!b) return;
+            const x = res[+b.dataset.i], a = x.address || {};
+            pos = { lat: +x.lat, lng: +x.lon };
+            marker.setLatLng([pos.lat, pos.lng]).setOpacity(1); map.setView([pos.lat, pos.lng], 17);
+            const street = [a.road, a.house_number].filter(Boolean).join(' ');
+            $('addr').value = street ? `${street}, ${a.city || a.town || a.village || ''}`.replace(/, $/, '') : x.display_name;
+            if (a.postcode && /^\d{4}-\d{3}$/.test(a.postcode)) $('cp').value = a.postcode;
+            const z = a.suburb || a.city_district || a.neighbourhood || a.quarter || a.town || a.city;
+            if (z && !$('zone').value) $('zone').value = z;
+            $('sugg').classList.add('hidden');
+          };
+        } catch (e) { $('sugg').innerHTML = '<li><button type="button" disabled>Pesquisa indisponível. Coloque o marcador no mapa.</button></li>'; }
+      };
+      $('find').onclick = search;
+      $('addr').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
+    };
+    S.localizacao = async () => {
+      const address = $('addr').value.trim(), cp = $('cp').value.trim(), zone = $('zone').value.trim();
+      if (!address) return err('Indique a morada.'), false;
+      if (!pos) return err('Procure a morada ou coloque o marcador no mapa.'), false;
+      if (cp && !/^\d{4}-\d{3}$/.test(cp)) return err('Código postal no formato 0000-000.'), false;
+      if (!zone) return err('Indique a zona (ex.: Boavista, Baixa, Foz).'), false;
+      await saveListing({ zone });
+      const { data, error } = await db.from('listing_private').upsert({ listing_id: L0.id, address, postal_code: cp || null, lat: pos.lat, lng: pos.lng, access_instructions: P0 ? P0.access_instructions : null }).select().single();
+      if (error) throw error;
+      P0 = data;
+    };
+
+    // Características
+    R.caracteristicas = () => head(3, 'Como é o lugar?', 'Ajuda os condutores a escolher e a filtrar.') + `
+      <span class="label">Veículos aceites</span>
+      <div class="chips" id="veh" style="margin-bottom:20px">${PNC.VEHICLES.map(([id, l]) => `<button type="button" class="chip ${(L0.vehicle_types || ['carro']).includes(id) ? 'on' : ''}" data-v="${id}">${l}</button>`).join('')}</div>
+      ${sw('covered', 'Coberto', 'Protegido da chuva', L0.is_covered)}
+      ${sw('under', 'Subterrâneo', 'Em cave ou parque subterrâneo', L0.is_underground)}
+      ${sw('closed', 'Pode ser fechado', 'Portão, porta ou box com chave', L0.is_closed)}
+      ${sw('solo', 'Lugar só para o condutor', 'Não é partilhado com outros veículos', L0.is_solo)}
+      ${sw('easy', 'Acesso fácil', 'Sem manobras difíceis, rampa larga', L0.easy_entry)}
+      <div class="field" style="margin-top:16px"><label for="height">Altura máxima (m) <span class="muted" style="font-weight:400">(opcional)</span></label><input class="input" id="height" inputmode="decimal" placeholder="Ex.: 2,10" value="${L0.max_height_m ?? ''}"></div>`;
+    R.caracteristicas.after = () => $('veh').onclick = e => { const c = e.target.closest('.chip'); if (c) c.classList.toggle('on'); };
+    S.caracteristicas = async () => {
+      const vt = [...document.querySelectorAll('#veh .chip.on')].map(c => c.dataset.v);
+      if (!vt.length) return err('Escolha pelo menos um tipo de veículo.'), false;
+      const h = num($('height').value);
+      if (h != null && (isNaN(h) || h < 1 || h > 6)) return err('Altura entre 1 e 6 metros.'), false;
+      await saveListing({ vehicle_types: vt, is_covered: $('covered').checked, is_underground: $('under').checked, is_closed: $('closed').checked, is_solo: $('solo').checked, easy_entry: $('easy').checked, max_height_m: h });
+    };
+
+    // Carregador
+    R.carregador = () => head(4, 'Tem carregador para veículos elétricos?', 'Lugares com carregador aparecem na categoria "Com carregador".') + `
+      ${sw('has', 'Sim, tem carregador', '', L0.has_charger)}
+      <div id="chg" style="margin-top:16px">
+        <div class="field"><label for="ctype">Tipo de ligação</label><select class="input" id="ctype"><option value="">Escolher…</option>${PNC.CHARGERS.map(([v, l]) => `<option value="${v}" ${L0.charger_type === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <div class="field"><label for="kw">Potência (kW) <span class="muted" style="font-weight:400">(opcional)</span></label><input class="input" id="kw" inputmode="decimal" placeholder="Ex.: 7,4" value="${L0.charger_kw ?? ''}"></div>
+        <span class="label">Energia</span>
+        <div class="chips" id="mode" style="margin-bottom:16px">
+          <button type="button" class="chip ${L0.charge_price_mode === 'incluido' ? 'on' : ''}" data-v="incluido">Incluída no preço</button>
+          <button type="button" class="chip ${L0.charge_price_mode === 'a_parte' ? 'on' : ''}" data-v="a_parte">Cobrada à parte</button>
+        </div>
+        <div class="field" id="kwh-wrap"><label for="kwh">Preço por kWh</label><div class="input-euro"><input class="input" id="kwh" inputmode="decimal" placeholder="0,25" value="${L0.charge_price_kwh ?? ''}"></div></div>
+      </div>`;
+    R.carregador.after = () => {
+      const paint = () => {
+        $('chg').classList.toggle('hidden', !$('has').checked);
+        const m = document.querySelector('#mode .chip.on');
+        $('kwh-wrap').classList.toggle('hidden', !m || m.dataset.v !== 'a_parte');
+      };
+      $('has').onchange = paint;
+      $('mode').onclick = e => { const c = e.target.closest('.chip'); if (!c) return; document.querySelectorAll('#mode .chip').forEach(x => x.classList.toggle('on', x === c)); paint(); };
+      paint();
+    };
+    S.carregador = async () => {
+      if (!$('has').checked) return saveListing({ has_charger: false, charger_type: null, charger_kw: null, charge_price_mode: null, charge_price_kwh: null });
+      const type = $('ctype').value, m = document.querySelector('#mode .chip.on'), kw = num($('kw').value), kwh = num($('kwh').value);
+      if (!type) return err('Escolha o tipo de ligação.'), false;
+      if (!m) return err('Indique se a energia está incluída ou é cobrada à parte.'), false;
+      if (kw != null && (isNaN(kw) || kw <= 0)) return err('Potência inválida.'), false;
+      if (m.dataset.v === 'a_parte' && (kwh == null || isNaN(kwh) || kwh < 0)) return err('Indique o preço por kWh.'), false;
+      await saveListing({ has_charger: true, charger_type: type, charger_kw: kw, charge_price_mode: m.dataset.v, charge_price_kwh: m.dataset.v === 'a_parte' ? kwh : null });
+    };
+
+    // Fotos
+    async function loadPhotos() {
+      const { data } = await db.from('listing_photos').select('*').eq('listing_id', L0.id).order('position').order('created_at');
+      photos = data || [];
+    }
+    function paintPhotos() {
+      $('grid').innerHTML = photos.map((p, i) => `
+        <div class="photo" style="background-image:url('${PNC.photoUrl(p.storage_path)}')">
+          ${i === 0 ? '<span class="tag">Capa</span>' : ''}
+          <div class="p-actions">
+            ${i ? `<button type="button" data-cover="${p.id}" aria-label="Usar como capa" title="Usar como capa">${I('star')}</button>` : ''}
+            <button type="button" data-del="${p.id}" aria-label="Apagar fotografia">${I('close')}</button>
+          </div>
+        </div>`).join('') + (photos.length < 6 ? `<label class="photo-add" for="file">${I('camera')}<span>Adicionar fotografias</span></label>` : '');
+    }
+    R.fotos = () => head(5, 'Adicione fotografias', 'Entre 1 e 6. Mostre a entrada, o lugar e o acesso. A primeira é a capa.') +
+      `<input type="file" id="file" accept="image/*" multiple class="sr"><div class="photos" id="grid"><div class="spinner"></div></div><p class="hint" id="up"></p>`;
+    R.fotos.after = async () => {
+      await loadPhotos(); paintPhotos();
+      $('file').onchange = async e => {
+        const files = [...e.target.files].slice(0, 6 - photos.length);
+        e.target.value = '';
+        for (let i = 0; i < files.length; i++) {
+          $('up').textContent = `A enviar ${i + 1} de ${files.length}…`;
+          try {
+            const blob = await compress(files[i]);
+            const path = `${user.id}/${L0.id}/${crypto.randomUUID()}.jpg`;
+            const up = await plataforma.storage.from(PNC.BUCKET).upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000' });
+            if (up.error) throw up.error;
+            const pos = photos.length ? Math.max(...photos.map(p => p.position)) + 1 : 0;
+            const { error } = await db.from('listing_photos').insert({ listing_id: L0.id, storage_path: path, position: pos });
+            if (error) { await plataforma.storage.from(PNC.BUCKET).remove([path]); throw error; }
+            await loadPhotos(); paintPhotos();
+          } catch (x) { err(PNC.dbError(x) || 'Não foi possível enviar a fotografia.'); }
+        }
+        $('up').textContent = '';
+      };
+      $('grid').onclick = async e => {
+        const d = e.target.closest('[data-del]'), cv = e.target.closest('[data-cover]');
+        if (d) {
+          const p = photos.find(x => x.id === d.dataset.del);
+          const { error } = await db.from('listing_photos').delete().eq('id', p.id);
+          if (error) return err(PNC.dbError(error));
+          await plataforma.storage.from(PNC.BUCKET).remove([p.storage_path]);
+        } else if (cv) {
+          const min = Math.min(...photos.map(p => p.position));
+          const { error } = await db.from('listing_photos').update({ position: min - 1 }).eq('id', cv.dataset.cover);
+          if (error) return err(PNC.dbError(error));
+        } else return;
+        await loadPhotos(); paintPhotos();
+      };
+    };
+    // Redimensiona para no máx. 1600 px e converte para JPEG
+    async function compress(file) {
+      const bmp = await createImageBitmap(file);
+      const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+      cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+      return await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.82));
+    }
+    S.fotos = async () => { if (!photos.length) return err('Adicione pelo menos uma fotografia.'), false; };
+
+    // Título
+    R.titulo = () => {
+      const t = PNC.SPOT_TYPES.find(x => x[0] === L0.spot_type);
+      const sug = L0.title || (t ? `${t[1]}${L0.zone ? ' na ' + L0.zone : ''}${L0.has_charger ? ' com carregador' : ''}` : '');
+      return head(6, 'Dê um título ao anúncio', 'Curto e claro. Pode alterar mais tarde.') + `
+        <div class="field"><label for="ttl">Título</label><input class="input" id="ttl" maxlength="80" value="${esc(sug)}"><div class="hint"><span id="tc">0</span>/80</div></div>
+        <div class="field"><label for="desc">Descrição <span class="muted" style="font-weight:400">(opcional)</span></label><textarea class="input" id="desc" maxlength="2000" placeholder="Ex.: Garagem individual a 3 min do metro. Porta automática, cabe um SUV.">${esc(L0.description || '')}</textarea></div>`;
+    };
+    R.titulo.after = () => { const u = () => $('tc').textContent = $('ttl').value.length; $('ttl').oninput = u; u(); };
+    S.titulo = async () => {
+      const t = $('ttl').value.trim();
+      if (t.length < 5) return err('O título deve ter pelo menos 5 caracteres.'), false;
+      await saveListing({ title: t, description: $('desc').value.trim() || null });
+    };
+
+    // Horário
+    R.horario = () => head(7, 'Quando está disponível?', 'Horário semanal em que o lugar pode ser usado.') + `
+      <div class="chips" style="margin-bottom:12px">
+        <button type="button" class="chip" id="p24">24 h, todos os dias</button>
+        <button type="button" class="chip" id="pwork">Dias úteis 8h–20h</button>
+      </div>
+      <div id="days">${PNC.WEEKDAYS.map((d, i) => {
+        const s = schedule.find(x => x.weekday === i);
+        const all = s && s.opens_at.startsWith('00:00') && s.closes_at.startsWith('24:00');
+        return `<div class="sched-row" data-d="${i}">
+          <b>${d}</b>
+          <span class="switch"><input type="checkbox" class="open" aria-label="Aberto à ${d.toLowerCase()}" ${s ? 'checked' : ''}><span></span></span>
+          <div class="times ${s ? '' : 'hidden'}">
+            <label class="chip ${all ? 'on' : ''}" style="flex:none"><input type="checkbox" class="all sr" ${all ? 'checked' : ''}>24 h</label>
+            <input class="input from" type="time" value="${s && !all ? s.opens_at.slice(0, 5) : '08:00'}" ${all ? 'disabled' : ''} aria-label="Abre">
+            <span>–</span>
+            <input class="input to" type="time" value="${s && !all ? s.closes_at.slice(0, 5) : '20:00'}" ${all ? 'disabled' : ''} aria-label="Fecha">
+          </div>
+        </div>`;
+      }).join('')}</div>`;
+    R.horario.after = () => {
+      const rows = [...document.querySelectorAll('.sched-row')];
+      const paint = r => {
+        const open = r.querySelector('.open').checked, all = r.querySelector('.all').checked;
+        r.querySelector('.times').classList.toggle('hidden', !open);
+        r.querySelector('.all').parentElement.classList.toggle('on', all);
+        r.querySelectorAll('.from,.to').forEach(x => x.disabled = all);
+      };
+      rows.forEach(r => r.addEventListener('change', () => paint(r)));
+      $('p24').onclick = () => rows.forEach(r => { r.querySelector('.open').checked = true; r.querySelector('.all').checked = true; paint(r); });
+      $('pwork').onclick = () => rows.forEach((r, i) => { r.querySelector('.open').checked = i < 5; r.querySelector('.all').checked = false; r.querySelector('.from').value = '08:00'; r.querySelector('.to').value = '20:00'; paint(r); });
+    };
+    S.horario = async () => {
+      const rows = [];
+      for (const r of document.querySelectorAll('.sched-row')) {
+        if (!r.querySelector('.open').checked) continue;
+        const all = r.querySelector('.all').checked;
+        const o = all ? '00:00' : r.querySelector('.from').value, c = all ? '24:00' : r.querySelector('.to').value;
+        if (!o || !c || (!all && c <= o)) return err(`${PNC.WEEKDAYS[+r.dataset.d]}: a hora de fecho tem de ser depois da abertura.`), false;
+        rows.push({ listing_id: L0.id, weekday: +r.dataset.d, opens_at: o, closes_at: c });
+      }
+      if (!rows.length) return err('Abra pelo menos um dia.'), false;
+      let { error } = await db.from('listing_schedule').delete().eq('listing_id', L0.id);
+      if (error) throw error;
+      ({ error } = await db.from('listing_schedule').insert(rows));
+      if (error) throw error;
+      schedule = rows;
+    };
+
+    // Preços
+    R.precos = () => head(8, 'Defina os preços', 'Preencha os que quiser oferecer. Pelo menos um.') + `
+      <div class="field"><label for="ph">Por hora</label><div class="input-euro"><input class="input" id="ph" inputmode="decimal" value="${L0.price_hour ?? ''}"></div></div>
+      <div class="field"><label for="pd">Por dia</label><div class="input-euro"><input class="input" id="pd" inputmode="decimal" value="${L0.price_day ?? ''}"></div></div>
+      <div class="field"><label for="pm">Por mês</label><div class="input-euro"><input class="input" id="pm" inputmode="decimal" value="${L0.price_month ?? ''}"></div></div>
+      <span class="label" style="margin-top:8px">Como quer receber as reservas?</span>
+      <div class="options" id="book">
+        <button type="button" class="option ${L0.instant_book ? 'on' : ''}" data-v="1">${I('bolt')}<span><b>Reserva instantânea</b><small>Os condutores reservam logo, sem esperar pela sua aprovação</small></span></button>
+        <button type="button" class="option ${L0.instant_book ? '' : 'on'}" data-v="0">${I('check')}<span><b>Aprovo cada pedido</b><small>Recebe o pedido e aceita ou recusa</small></span></button>
+      </div>`;
+    R.precos.after = () => $('book').onclick = e => { const o = e.target.closest('.option'); if (o) document.querySelectorAll('#book .option').forEach(x => x.classList.toggle('on', x === o)); };
+    S.precos = async () => {
+      const ph = num($('ph').value), pd = num($('pd').value), pm = num($('pm').value);
+      if ([ph, pd, pm].some(v => v != null && (isNaN(v) || v <= 0))) return err('Os preços têm de ser números maiores que zero.'), false;
+      if (ph == null && pd == null && pm == null) return err('Indique pelo menos um preço.'), false;
+      await saveListing({ price_hour: ph, price_day: pd, price_month: pm, instant_book: document.querySelector('#book .option.on').dataset.v === '1' });
+    };
+
+    // Rever e enviar
+    R.rever = () => {
+      const t = PNC.SPOT_TYPES.find(x => x[0] === L0.spot_type);
+      const ch = PNC.CHARGERS.find(x => x[0] === L0.charger_type);
+      const days = schedule.length === 7 && schedule.every(s => s.opens_at.startsWith('00:00') && s.closes_at.startsWith('24:00')) ? '24 h, todos os dias'
+        : schedule.map(s => `${PNC.WEEKDAYS[s.weekday].slice(0, 3)} ${s.opens_at.slice(0, 5)}–${s.closes_at.slice(0, 5)}`).join(', ');
+      const prices = [L0.price_hour && PNC.euro(L0.price_hour, '/h'), L0.price_day && PNC.euro(L0.price_day, '/dia'), L0.price_month && PNC.euro(L0.price_month, '/mês')].filter(Boolean).join(' · ');
+      const editing = ['ativo', 'pausado'].includes(L0.status);
+      const readonly = L0.status === 'pendente';
+      return head(9, readonly ? 'Anúncio em análise' : 'Reveja e envie', readonly ? 'Vamos rever o anúncio e avisamos quando ficar ativo.' : editing ? 'As alterações ficam visíveis de imediato.' : 'Depois de enviar, revemos o anúncio (normalmente em 24–48 h).') + `
+        ${photos.length ? `<div class="card-photo" style="aspect-ratio:16/9;margin-bottom:16px;background-image:url('${PNC.photoUrl(photos[0].storage_path)}')"></div>` : ''}
+        <div class="review"><dl>
+          <dt>Título</dt><dd>${esc(L0.title)}</dd>
+          <dt>Tipo</dt><dd>${t ? t[1] : '—'}</dd>
+          <dt>Morada</dt><dd>${esc(P0 ? P0.address : '—')}</dd>
+          <dt>Zona pública</dt><dd>${esc(L0.zone)}</dd>
+          <dt>Veículos</dt><dd>${(L0.vehicle_types || []).map(v => (PNC.VEHICLES.find(x => x[0] === v) || [, v])[1]).join(', ')}</dd>
+          <dt>Carregador</dt><dd>${L0.has_charger ? `${ch ? ch[1] : ''}${L0.charger_kw ? ', ' + L0.charger_kw + ' kW' : ''} · ${L0.charge_price_mode === 'incluido' ? 'energia incluída' : PNC.euro(L0.charge_price_kwh, '/kWh')}` : 'Não'}</dd>
+          <dt>Fotografias</dt><dd>${photos.length}</dd>
+          <dt>Horário</dt><dd>${days || '—'}</dd>
+          <dt>Preços</dt><dd>${prices}</dd>
+          <dt>Reservas</dt><dd>${L0.instant_book ? 'Instantâneas' : 'Com aprovação'}</dd>
+        </dl></div>
+        <div class="field" style="margin-top:20px"><label for="acc">Instruções de acesso <span class="muted" style="font-weight:400">(privadas)</span></label>
+          <textarea class="input" id="acc" maxlength="1000" ${readonly ? 'disabled' : ''} placeholder="Ex.: Portão da Rua X, código enviado no dia. Piso -1, lugar 23.">${esc(P0 ? P0.access_instructions || '' : '')}</textarea>
+          <div class="hint">Só o condutor com reserva confirmada vê estas instruções.</div></div>`;
+    };
+    S.rever = async () => {
+      if (L0.status === 'pendente') { location.href = '/anfitriao.html'; return false; }
+      const { error } = await db.from('listing_private').update({ access_instructions: $('acc').value.trim() || null }).eq('listing_id', L0.id);
+      if (error) throw error;
+      if (['rascunho', 'recusado'].includes(L0.status)) {
+        await saveListing({ status: 'pendente' });
+        location.href = '/anfitriao.html';
+      } else {
+        PNC.toast('Alterações guardadas.');
+        setTimeout(() => location.href = '/anfitriao.html', 800);
+      }
+      return false;
+    };
+
+    // ---------- Navegação ----------
+    async function show(i) {
+      idx = i; clearErr();
+      const key = STEPS[i];
+      $('step').innerHTML = R[key]();
+      $('bar').style.width = ((i + 1) / STEPS.length * 100) + '%';
+      $('prev').style.visibility = i === 0 ? 'hidden' : 'visible';
+      const last = i === STEPS.length - 1;
+      $('next').textContent = last
+        ? (L0.status === 'pendente' ? 'Voltar aos meus lugares' : ['ativo', 'pausado'].includes(L0.status) ? 'Guardar alterações' : 'Enviar para aprovação')
+        : 'Seguinte';
+      $('next').classList.toggle('orange', last && L0.status !== 'pendente');
+      if (R[key].after) await R[key].after();
+      window.scrollTo(0, 0);
+    }
+    $('next').onclick = async () => {
+      clearErr(); $('next').disabled = true;
+      try {
+        const ok = await S[STEPS[idx]]();
+        if (ok !== false && idx < STEPS.length - 1) await show(idx + 1);
+      } catch (x) { err(PNC.dbError(x)); }
+      finally { $('next').disabled = false; }
+    };
+    $('prev').onclick = () => idx > 0 && show(idx - 1);
+
+    (async () => {
+      if (!db || !window.L) { $('step').innerHTML = '<div class="msg err">Não foi possível ligar ao servidor. Recarregue a página.</div>'; return; }
+      user = await PNC.requireLogin(); if (!user) return;
+      const { data: hp } = await db.from('host_profiles').select('user_id').eq('user_id', user.id).maybeSingle();
+      if (!hp) { location.replace('/anfitriao.html'); return; }
+      const id = qs.get('id');
+      if (id) {
+        const { data, error } = await db.from('listings').select('*').eq('id', id).eq('host_id', user.id).maybeSingle();
+        if (error || !data) { $('step').innerHTML = '<div class="msg err">Lugar não encontrado.</div>'; return; }
+        L0 = data;
+        const [{ data: p }, { data: s }] = await Promise.all([
+          db.from('listing_private').select('*').eq('listing_id', id).maybeSingle(),
+          db.from('listing_schedule').select('*').eq('listing_id', id).order('weekday'),
+        ]);
+        P0 = p; schedule = s || [];
+        await loadPhotos();
+        $('title').textContent = L0.status === 'rascunho' ? 'Continuar anúncio' : 'Editar lugar';
+      }
+      if (L0.status === 'pendente' || qs.get('passo') === 'rever') return show(STEPS.length - 1);
+      if (L0.status === 'recusado' && L0.rejection_reason) {
+        await show(0);
+        const m = $('msg'); m.textContent = 'Motivo da recusa: ' + L0.rejection_reason; m.className = 'msg info';
+        return;
+      }
+      show(0);
+    })();
+  </script>
+</body>
+</html>
