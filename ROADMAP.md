@@ -21,7 +21,7 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 ## v0.1 — Esqueleto e identidade
 - [x] Repositório `parkncharge`, README e roadmap
 - [x] Página provisória com a identidade do Figma (cores, logótipo)
-- [ ] Cloudflare Pages ligado ao repositório + `parkncharge.frisk.pt`
+- [x] Cloudflare Pages ligado ao repositório + `parkncharge.frisk.pt`
 - [x] Design system em CSS (cores, tipografia, botões, campos, barra inferior de navegação)
 - [x] Home provisória (saudação, localização, "Perto de si", convite a anfitriões)
 - [x] Login/registo com email + Google, recuperação de palavra-passe, terminar sessão (`auth.js` do `plataforma-core`)
