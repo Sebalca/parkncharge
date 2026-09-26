@@ -1,0 +1,67 @@
+:root {
+  --pnc-blue: #436E91;
+  --pnc-blue-dark: #34597A;
+  --pnc-cream: #F3E9B5;
+  --pnc-orange: #E95322;
+  --pnc-bg: #F5F5F5;
+  --pnc-surface: #FFFFFF;
+  --pnc-text: #3A1D17;
+  --pnc-muted: #7A6A66;
+  --pnc-light: #CFE2F1;
+  --radius-lg: 28px;
+  --radius-md: 16px;
+  --radius-pill: 999px;
+  --font-head: "Josefin Sans", system-ui, sans-serif;
+  --font-body: "Lato", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: var(--font-body);
+  color: var(--pnc-text);
+  background: var(--pnc-blue);
+  min-height: 100dvh;
+}
+
+.splash {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 32px 16px;
+  color: #fff;
+  text-align: center;
+}
+.splash .logo { width: min(240px, 60vw); height: auto; }
+.splash h1 {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: clamp(28px, 7vw, 40px);
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+.splash .tagline {
+  font-family: var(--font-head);
+  color: var(--pnc-light);
+  font-size: 17px;
+  margin: 0;
+}
+.badge {
+  margin-top: 12px;
+  background: var(--pnc-cream);
+  color: var(--pnc-blue-dark);
+  font-family: var(--font-head);
+  font-weight: 600;
+  padding: 10px 22px;
+  border-radius: var(--radius-pill);
+}
+.splash footer {
+  position: fixed;
+  bottom: 16px;
+  font-size: 13px;
+  color: var(--pnc-light);
+  opacity: 0.8;
+}
