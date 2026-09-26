@@ -4,30 +4,91 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Parkncharge</title>
-  <meta name="description" content="Estacionamento e carregamento elétrico entre particulares e empresas, no Porto.">
+  <meta name="description" content="Encontre e reserve lugares de estacionamento — com ou sem carregamento elétrico — no Porto.">
   <meta name="theme-color" content="#436E91">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  <main class="splash">
-    <svg class="logo" viewBox="0 0 240 150" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">
-      <!-- relâmpago -->
-      <path d="M58 8 L14 78 H44 L30 132 L84 56 H54 Z" fill="#436E91"/>
-      <!-- carro-bateria -->
-      <rect x="62" y="34" width="150" height="72" rx="8"/>
-      <rect x="212" y="56" width="12" height="28" rx="3"/>
-      <path d="M92 94 L114 46 M106 94 L128 46 M120 94 L142 46"/>
-      <path d="M140 94 L162 46 H200 V94 Z"/>
-      <circle cx="104" cy="118" r="14" fill="#436E91"/>
-      <circle cx="170" cy="118" r="14" fill="#436E91"/>
-    </svg>
-    <h1>parkncharge</h1>
-    <p class="tagline">Park with ease, rent in a breeze.</p>
-    <span class="badge">Brevemente no Porto</span>
-    <footer>parte da plataforma frisk.pt · v0.1</footer>
-  </main>
+  <div class="app">
+    <header class="top">
+      <div class="top-bar">
+        <label class="search">
+          <input id="loc" type="text" placeholder="A sua localização" autocomplete="off" aria-label="Localização">
+          <button class="icon-btn" id="locate" type="button" aria-label="Usar a minha localização" data-icon="target"></button>
+        </label>
+        <button class="icon-btn light" type="button" aria-label="Filtros" data-icon="sliders" onclick="document.getElementById('soon').scrollIntoView({behavior:'smooth'})"></button>
+      </div>
+      <h1 id="hello">Olá</h1>
+      <p class="sub">Estacione com facilidade, arrende sem complicações.</p>
+    </header>
+
+    <main class="sheet">
+      <h2 id="mapa">Perto de si</h2>
+      <div class="map-card" id="soon">
+        <div><strong>Mapa em breve</strong>Estamos a reunir os primeiros lugares no Porto.</div>
+      </div>
+
+      <hr class="divider">
+
+      <div class="section-head">
+        <h2>Lugares</h2>
+      </div>
+      <div class="grid" aria-hidden="true">
+        <div class="spot-card" data-icon="garage"></div>
+        <div class="spot-card" data-icon="garage"></div>
+      </div>
+      <p class="empty">Ainda não há lugares publicados.</p>
+
+      <section class="host-cta">
+        <h3>Tem um lugar ou garagem livre?</h3>
+        <p>Arrende-o à hora, ao dia ou ao mês. Crie conta para ser dos primeiros anfitriões no Porto.</p>
+        <a class="btn small" id="host-btn" href="login.html?modo=registo&next=/">Quero arrendar o meu lugar</a>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
+  <script>
+    document.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = PNC.icon(el.dataset.icon));
+    PNC.renderNav('home');
+
+    const hello = document.getElementById('hello');
+    hello.textContent = PNC.greeting();
+
+    // Localização atual (só preenche o campo na v0.1; pesquisa por proximidade chega na v0.3)
+    document.getElementById('locate').addEventListener('click', () => {
+      const loc = document.getElementById('loc');
+      if (!navigator.geolocation) { loc.value = 'Localização indisponível'; return; }
+      loc.value = 'A localizar…';
+      navigator.geolocation.getCurrentPosition(
+        p => loc.value = `${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}`,
+        () => loc.value = ''
+      );
+    });
+
+    // Sessão: saudação com nome e botão de anfitrião adaptado
+    (async () => {
+      if (!window.Auth) return; // sem ligação: página funciona na mesma
+      const user = await Auth.getUser();
+      if (!user) return;
+      let nome = (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name)) || '';
+      try {
+        const { data } = await plataforma.from('profiles').select('nome').eq('id', user.id).maybeSingle();
+        if (data && data.nome) nome = data.nome;
+      } catch (e) {}
+      if (nome) hello.textContent = `${PNC.greeting()}, ${nome.split(' ')[0]}`;
+      const hb = document.getElementById('host-btn');
+      hb.textContent = 'Publicar lugar (em breve)';
+      hb.removeAttribute('href');
+      hb.setAttribute('aria-disabled', 'true');
+      hb.style.opacity = .7;
+    })();
+  </script>
 </body>
 </html>

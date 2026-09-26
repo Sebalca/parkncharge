@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Entrar — Parkncharge</title>
+  <meta name="theme-color" content="#436E91">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="top-title">
+      <a class="back" href="/" aria-label="Voltar">‹</a>
+      <h1 id="title">Entrar</h1>
+      <span style="width:36px"></span>
+    </header>
+
+    <main class="sheet">
+      <div id="msg" class="msg hidden" role="status"></div>
+
+      <!-- Formulário entrar / criar conta -->
+      <section id="auth-view">
+        <div class="tabs" role="tablist">
+          <button class="chip on" id="tab-login" role="tab" type="button">Entrar</button>
+          <button class="chip" id="tab-signup" role="tab" type="button">Criar conta</button>
+        </div>
+
+        <h2 id="welcome">Bem-vindo de volta</h2>
+        <p class="muted" id="intro">Entre com a conta frisk.pt — a mesma em todos os sites da plataforma.</p>
+
+        <form id="form" novalidate>
+          <div class="field hidden" id="f-nome">
+            <label for="nome">Nome</label>
+            <input class="input" id="nome" autocomplete="name">
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input class="input" id="email" type="email" autocomplete="email" required>
+          </div>
+          <div class="field" id="f-pass">
+            <label for="pass">Palavra-passe</label>
+            <div class="input-wrap">
+              <input class="input" id="pass" type="password" autocomplete="current-password" minlength="6" required>
+              <button class="icon-btn eye" id="eye" type="button" aria-label="Mostrar palavra-passe" data-icon="eye"></button>
+            </div>
+          </div>
+          <div class="link-right" id="forgot-wrap"><button type="button" id="forgot">Esqueceu-se da palavra-passe?</button></div>
+          <button class="btn block" id="submit" type="submit">Entrar</button>
+        </form>
+
+        <div class="or">ou</div>
+        <button class="btn google block" id="google" type="button">
+          <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.2-.1-2.3-.4-3.5z"/></svg>
+          Continuar com Google
+        </button>
+      </section>
+
+      <!-- Definir nova palavra-passe (link de recuperação) -->
+      <section id="reset-view" class="hidden">
+        <h2>Nova palavra-passe</h2>
+        <form id="reset-form">
+          <div class="field">
+            <label for="newpass">Palavra-passe</label>
+            <input class="input" id="newpass" type="password" autocomplete="new-password" minlength="6" required>
+          </div>
+          <button class="btn block" type="submit">Guardar</button>
+        </form>
+      </section>
+
+      <!-- Sessão iniciada -->
+      <section id="account-view" class="hidden">
+        <h2>A sua conta</h2>
+        <p class="muted">Sessão iniciada como <strong id="acc-email"></strong>.</p>
+        <p class="muted">Perfil, os meus lugares e reservas chegam nas próximas versões.</p>
+        <a class="btn block" href="/" style="margin:12px 0">Ir para o início</a>
+        <div class="center"><button class="text-btn" id="logout" type="button">Terminar sessão</button></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
+  <script>
+    document.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = PNC.icon(el.dataset.icon));
+    PNC.renderNav('user');
+
+    const $ = id => document.getElementById(id);
+    const params = new URLSearchParams(location.search);
+    // Só aceitar destinos internos (evita redirecionamentos para outros sites)
+    const next = (params.get('next') || '/').startsWith('/') && !(params.get('next') || '').startsWith('//') ? (params.get('next') || '/') : '/';
+    let mode = params.get('modo') === 'registo' ? 'signup' : 'login';
+
+    function show(text, kind = 'err') {
+      const m = $('msg');
+      m.textContent = text; m.className = 'msg ' + kind;
+    }
+    function clearMsg() { $('msg').className = 'msg hidden'; }
+
+    function setMode(m) {
+      mode = m; clearMsg();
+      const signup = m === 'signup';
+      $('tab-login').classList.toggle('on', !signup);
+      $('tab-signup').classList.toggle('on', signup);
+      $('title').textContent = signup ? 'Criar conta' : 'Entrar';
+      $('welcome').textContent = signup ? 'Bem-vindo' : 'Bem-vindo de volta';
+      $('f-nome').classList.toggle('hidden', !signup);
+      $('forgot-wrap').classList.toggle('hidden', signup);
+      $('submit').textContent = signup ? 'Criar conta' : 'Entrar';
+      $('pass').autocomplete = signup ? 'new-password' : 'current-password';
+    }
+    $('tab-login').onclick = () => setMode('login');
+    $('tab-signup').onclick = () => setMode('signup');
+    setMode(mode);
+
+    $('eye').onclick = () => {
+      const p = $('pass'); const on = p.type === 'password';
+      p.type = on ? 'text' : 'password';
+      $('eye').classList.toggle('on', on);
+      $('eye').setAttribute('aria-label', on ? 'Esconder palavra-passe' : 'Mostrar palavra-passe');
+    };
+
+    function showAccount(user) {
+      $('auth-view').classList.add('hidden');
+      $('reset-view').classList.add('hidden');
+      $('account-view').classList.remove('hidden');
+      $('acc-email').textContent = user.email;
+      $('title').textContent = 'Conta';
+    }
+
+    if (!window.Auth) {
+      show('Não foi possível ligar ao servidor. Verifique a ligação à internet e recarregue a página.');
+    } else {
+      Auth.onChange((event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          $('auth-view').classList.add('hidden');
+          $('account-view').classList.add('hidden');
+          $('reset-view').classList.remove('hidden');
+          $('title').textContent = 'Recuperar conta';
+        }
+      });
+
+      (async () => {
+        const user = await Auth.getUser();
+        if (user && !location.hash.includes('type=recovery')) {
+          if (params.get('next')) { location.replace(next); return; }
+          showAccount(user);
+        }
+      })();
+
+      $('form').onsubmit = async e => {
+        e.preventDefault(); clearMsg();
+        const email = $('email').value.trim();
+        const pass = $('pass').value;
+        if (!email) return show('Indique o email.');
+        if (pass.length < 6) return show('A palavra-passe deve ter pelo menos 6 caracteres.');
+        $('submit').disabled = true;
+        try {
+          if (mode === 'login') {
+            const { data, error } = await Auth.signIn(email, pass);
+            if (error) return show(PNC.authError(error));
+            location.replace(next);
+          } else {
+            const nome = $('nome').value.trim();
+            const { data, error } = await plataforma.auth.signUp({
+              email, password: pass,
+              options: {
+                data: nome ? { full_name: nome } : {},
+                emailRedirectTo: location.origin + next,
+              },
+            });
+            if (error) return show(PNC.authError(error));
+            if (data.session) {
+              if (nome) { try { await plataforma.from('profiles').upsert({ id: data.user.id, nome }); } catch (e) {} }
+              location.replace(next);
+            } else {
+              show('Conta criada. Enviámos um email de confirmação — clique no link para ativar a conta.', 'ok');
+            }
+          }
+        } finally { $('submit').disabled = false; }
+      };
+
+      $('forgot').onclick = async () => {
+        clearMsg();
+        const email = $('email').value.trim();
+        if (!email) return show('Escreva o seu email acima e carregue de novo em "Esqueceu-se da palavra-passe?".');
+        const { error } = await plataforma.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/login.html' });
+        if (error) return show(PNC.authError(error));
+        show('Se existir uma conta com este email, vai receber um link para definir uma nova palavra-passe.', 'ok');
+      };
+
+      $('google').onclick = async () => {
+        clearMsg();
+        const { error } = await Auth.signInWithGoogle({ options: { redirectTo: location.origin + next } });
+        if (error) show(PNC.authError(error));
+      };
+
+      $('reset-form').onsubmit = async e => {
+        e.preventDefault(); clearMsg();
+        const pw = $('newpass').value;
+        if (pw.length < 6) return show('A palavra-passe deve ter pelo menos 6 caracteres.');
+        const { error } = await plataforma.auth.updateUser({ password: pw });
+        if (error) return show(PNC.authError(error));
+        show('Palavra-passe atualizada.', 'ok');
+        const user = await Auth.getUser();
+        if (user) showAccount(user);
+      };
+
+      $('logout').onclick = async () => { await Auth.signOut(); location.replace('/'); };
+    }
+  </script>
+</body>
+</html>

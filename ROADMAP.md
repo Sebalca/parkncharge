@@ -10,6 +10,9 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 - Domínio: `parkncharge.frisk.pt` (login partilhado da plataforma); domínio próprio mais tarde.
 - Dados: tabelas próprias num schema `parkncharge` no Supabase partilhado (ver [docs/modelo-dados.md](docs/modelo-dados.md)).
 - Design: ecrãs do Figma "First teste parkncharge" em [`design/`](design/).
+- Língua: só português (PT) por agora.
+- Login: email + Google (conta frisk.pt partilhada). Sem ecrã de arranque.
+- Sem conta pode-se ver tudo; a conta só é pedida para reservar ou para publicar um lugar.
 
 > Antes de cada versão: perguntas e sugestões para fechar o âmbito. Só depois se implementa.
 
@@ -19,9 +22,10 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 - [x] Repositório `parkncharge`, README e roadmap
 - [x] Página provisória com a identidade do Figma (cores, logótipo)
 - [ ] Cloudflare Pages ligado ao repositório + `parkncharge.frisk.pt`
-- [ ] Design system em CSS (cores, tipografia, botões, campos, barra inferior de navegação)
-- [ ] Ecrã de arranque (splash) e ecrã de login/registo com o `auth.js` do `plataforma-core`
-- [ ] Registo do site na tabela `sites` do Supabase
+- [x] Design system em CSS (cores, tipografia, botões, campos, barra inferior de navegação)
+- [x] Home provisória (saudação, localização, "Perto de si", convite a anfitriões)
+- [x] Login/registo com email + Google, recuperação de palavra-passe, terminar sessão (`auth.js` do `plataforma-core`)
+- [x] Registo do site na tabela `sites` do Supabase
 
 ## v0.2 — Anúncios (lado do anfitrião)
 - [ ] Schema `parkncharge` com RLS: `host_profiles`, `listings`, `listing_photos`, `listing_schedule`

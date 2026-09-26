@@ -11,8 +11,11 @@ Parte da plataforma **frisk.pt**: conta única partilhada com os outros sites (l
 
 ## Estrutura
 ```
-index.html          # v0.1: página provisória
-assets/style.css    # tokens de design (cores/tipografia do Figma)
+index.html          # início (público)
+login.html          # entrar / criar conta / recuperar palavra-passe
+assets/style.css    # design system (cores/tipografia do Figma)
+assets/app.js       # ícones, barra de navegação, utilitários
+assets/icon.svg     # favicon
 design/             # ecrãs de referência do Figma
 docs/               # modelo de dados e notas técnicas
 ```
@@ -31,11 +34,12 @@ Site estático em HTML/CSS/JS, sem build. Funciona aberto localmente e no Cloudf
 1. Cloudflare → Workers & Pages → Create → Pages → Connect to Git → `parkncharge`.
    - Framework preset: *None* · Build command: *(vazio)* · Output directory: `/`
 2. Custom domains → `parkncharge.frisk.pt`.
+3. Supabase → Authentication → URL Configuration → Redirect URLs: acrescentar `https://parkncharge.frisk.pt/**` (necessário para Google, confirmação de email e recuperação de palavra-passe).
 
 ## Segurança
 - Só a chave pública (publishable/anon) do Supabase no frontend; tudo protegido por RLS.
 - Service keys e segredos apenas em GitHub Secrets / variáveis da Cloudflare.
 
 ## Versões
-- **v0.1** (em curso) — esqueleto, identidade, página provisória, login partilhado.
+- **v0.1** (em curso) — design system, início provisório, login partilhado (email + Google). Só PT.
 - Ver [ROADMAP.md](ROADMAP.md) para v0.2 → v1.0 e v1.1 (Stripe).
