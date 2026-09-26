@@ -1,4 +1,4 @@
-# Modelo de dados — Parkncharge (proposta)
+# Modelo de dados — Parkncharge
 
 Projeto Supabase partilhado da plataforma ("Sites"). SQL em [`supabase/migrations/`](../supabase/migrations/). Os dados do Parkncharge ficam num **schema próprio `parkncharge`**,
 separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque são dados partilhados entre utilizadores
@@ -25,12 +25,13 @@ separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque
 
 ## Tabelas
 - **host_profiles** — `user_id` (PK, → auth.users), `host_type` (particular/empresa), `company_name`, `nif`, `created_at`
-- **listings** — `id`, `host_id`, `title`, `address`, `location` (geography Point, PostGIS), `description`,
-  `vehicle_types[]` (moto, carro, carrinha, autocarro, camião, autocaravana),
-  `is_underground`, `is_closed`, `is_solo`, `easy_entry`,
-  `has_charger`, `charger_type`, `charger_kw`, `charge_price_mode` (incluído/à parte), `charge_price`,
-  `price_hour`, `price_day`, `price_month`, `instant_book` (bool), `access_instructions` (privado),
-  `status` (rascunho/ativo/pausado), `created_at`
+- **listings** — `id`, `host_id`, `status` (rascunho/pendente/ativo/recusado/pausado), `rejection_reason`, `title`, `description`,
+  `spot_type` (garagem/box/lugar_coberto/lugar_descoberto/parque), `zone`, `city`, `approx_lat`, `approx_lng`,
+  `vehicle_types[]` (moto, carro, carrinha, autocarro, camiao, autocaravana),
+  `is_covered`, `is_underground`, `is_closed`, `is_solo`, `easy_entry`, `max_height_m`,
+  `has_charger`, `charger_type`, `charger_kw`, `charge_price_mode` (incluido/a_parte), `charge_price_kwh`,
+  `price_hour`, `price_day`, `price_month`, `instant_book`, `cover_photo`, `submitted_at`, `approved_at`, `approved_by`
+- **listing_private** — `listing_id`, `address`, `postal_code`, `lat`, `lng`, `access_instructions`
 - **listing_photos** — `id`, `listing_id`, `storage_path`, `position`
 - **listing_schedule** — `listing_id`, `weekday` (0–6), `opens_at`, `closes_at`
 - **bookings** — `id`, `listing_id`, `driver_id`, `period` (tstzrange), `booking_type` (hora/dia/mês), `total_price`,
