@@ -235,13 +235,15 @@
       const seen = {};
       avail.forEach(l => {
         const k = l.approx_lat + ',' + l.approx_lng, n = seen[k] = (seen[k] || 0) + 1;
-        const lat = l.approx_lat + (n - 1) * 0.0007, lng = l.approx_lng + (n - 1) * 0.0009;
+        const ang = (n - 1) * 2.1, r = n > 1 ? 0.0012 : 0;
+        const lat = l.approx_lat + r * Math.sin(ang), lng = l.approx_lng + r * 1.3 * Math.cos(ang);
         L.marker([lat, lng], { icon: L.divIcon({ className: '', html: `<span class="pin-price ${l.has_charger ? 'charge' : ''}">${l.has_charger ? '⚡ ' : ''}${priceShort(l)}</span>`, iconSize: [0, 0] }) })
           .bindPopup(`<b>${esc(l.title)}</b>${esc(l.zone)} · ${PNC.walkText(dist(l))}<br>${PNC.mainPrice(l)}${l.is_demo ? ' · <i>Exemplo</i>' : ''}<br><small>Localização aproximada</small>`)
           .addTo(layer);
       });
-      const pts = [[state.near.lat, state.near.lng], ...avail.map(l => [l.approx_lat, l.approx_lng])];
-      if (pts.length > 1) map.fitBounds(pts, { padding: [40, 40], maxZoom: 16 }); else map.setView(pts[0], 14);
+      // enquadra a localização e as 4 mais próximas (as outras ficam visíveis ao afastar o mapa)
+      const pts = [[state.near.lat, state.near.lng], ...avail.slice(0, 4).map(l => [l.approx_lat, l.approx_lng])];
+      if (pts.length > 1) map.fitBounds(pts, { padding: [50, 50], maxZoom: 16 }); else map.setView(pts[0], 14);
       setTimeout(() => map.invalidateSize(), 50);
       return avail.length;
     }
