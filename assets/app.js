@@ -1,6 +1,9 @@
 // Parkncharge — código comum
 // Usa o auth.js partilhado (plataforma-core): window.Auth e window.plataforma.
 (function () {
+  // Versão atual — atualizar em cada alteração (ver PATCH NOTES.md)
+  const APP_VERSAO = 'v0.2a';
+
   const ICONS = {
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
     heart: '<path d="M12 20s-7-4.4-9-8.6C1.6 8.3 3.5 5 6.8 5c2 0 3.4 1.1 4.2 2.4C11.8 6.1 13.2 5 15.2 5c3.3 0 5.2 3.3 3.8 6.4C19 15.6 12 20 12 20z"/>',
@@ -93,7 +96,7 @@
           <div><h4>Anfitriões</h4><a href="/anfitriao.html">Arrendar o meu lugar</a><a href="/ajuda.html#anfitrioes">Como funciona</a><a href="/ajuda.html#carregadores">Lugares com carregador</a></div>
           <div><h4>Parkncharge</h4><a href="/ajuda.html#sobre">Sobre</a><a href="/termos.html">Termos</a><a href="/privacidade.html">Privacidade</a></div>
         </div>
-        <p class="foot-legal">© ${new Date().getFullYear()} Parkncharge · parte da plataforma frisk.pt · Porto, Portugal</p>`;
+        <p class="foot-legal">© ${new Date().getFullYear()} Parkncharge · parte da plataforma frisk.pt · Porto, Portugal · <span id="app-versao">${APP_VERSAO}</span></p>`;
       document.body.appendChild(f);
     }
     document.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = icon(el.dataset.icon));
@@ -228,7 +231,7 @@
   }
 
   window.PNC = {
-    icon, LOGO, renderChrome, db, photoUrl, BUCKET, currentUser, requireLogin, isAdmin, displayName,
+    APP_VERSAO, icon, LOGO, renderChrome, db, photoUrl, BUCKET, currentUser, requireLogin, isAdmin, displayName,
     CATEGORIES, VEHICLES, SPOT_TYPES, ZONES, CHARGERS, WEEKDAYS, STATUS,
     euro, mainPrice, esc, distance, walkText, toast, greeting, authError, dbError, SITE_ID: 'parkncharge',
   };

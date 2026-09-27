@@ -30,7 +30,7 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 - [x] Home provisória (saudação, localização, "Perto de si", convite a anfitriões)
 - [x] Login/registo com email + Google, recuperação de palavra-passe, terminar sessão (`auth.js` do `plataforma-core`)
 - [x] Registo do site na tabela `sites` do Supabase
-- [x] v0.1.1 — reestruturação à Airbnb (início, pesquisa, categorias, perfil, rodapé, páginas de ajuda)
+- [x] v0.1a — reestruturação à Airbnb (início, pesquisa, categorias, perfil, rodapé, páginas de ajuda)
 
 ## v0.2 — Anúncios (lado do anfitrião)
 - [x] Schema `parkncharge` com RLS: `host_profiles`, `listings`, `listing_private`, `listing_photos`, `listing_schedule` + bucket `parkncharge`

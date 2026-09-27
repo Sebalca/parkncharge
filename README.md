@@ -1,55 +1,242 @@
-# parkncharge.frisk.pt
+# Parkncharge — parkncharge.frisk.pt
 
-Marketplace de lugares de estacionamento — tipo Airbnb — com carregamento elétrico como atributo do lugar.
-Particulares e empresas disponibilizam lugares; condutores reservam à hora, ao dia ou ao mês. Lançamento no Porto.
+## Objetivo
 
-Parte da plataforma **frisk.pt**: conta única partilhada com os outros sites (login via [`plataforma-core`](https://github.com/Sebalca/plataforma-core)).
+Um **"Airbnb de estacionamento"** para o Porto: um mercado onde quem tem um lugar livre o arrenda a quem precisa de estacionar.
 
-- **Roadmap:** [ROADMAP.md](ROADMAP.md)
-- **Modelo de dados:** [docs/modelo-dados.md](docs/modelo-dados.md)
-- **Design (Figma "First teste parkncharge"):** [design/](design/)
+- **Anfitriões** (particulares e empresas) publicam garagens, boxes, lugares em parques ou logradouros. Arrendam à hora, ao dia ou ao mês e ganham dinheiro com espaço que não usam.
+- **Condutores** encontram um lugar perto do destino, filtram pelo que precisam (coberto, fechado, para carrinha…) e reservam.
+- **Carregamento elétrico** é um atributo do lugar: o anfitrião indica o tipo de ligação, a potência e se a energia está incluída ou é paga à parte por kWh. Daí o nome *park 'n' charge*.
+- **Confiança:** cada anúncio é revisto antes de ficar visível. A morada exata só é revelada depois de a reserva ser confirmada. Mais tarde haverá avaliações nos dois sentidos.
+- **Modelo de negócio (v1.1):** pagamentos dentro da plataforma com Stripe Connect e uma comissão por reserva. Até lá o pagamento é combinado entre as partes, para validar a procura.
 
-## Estrutura
-```
-index.html          # Explorar: pesquisa, categorias, lugares por zona (público)
-login.html          # entrar / criar conta / recuperar palavra-passe
-perfil.html         # perfil e menu (condutor / anfitrião)
-anfitriao.html      # modo anfitrião: os meus lugares, dados de anfitrião
-publicar.html       # assistente de publicação (9 passos)
-admin.html          # aprovação de anúncios (só administradores)
-favoritos.html, reservas.html, mensagens.html  # em breve
-ajuda.html, termos.html, privacidade.html
-supabase/migrations # SQL aplicado no projeto Supabase "Sites"
-assets/style.css    # design system (cores/tipografia do Figma)
-assets/app.js       # ícones, barra de navegação, utilitários
-assets/icon.svg     # favicon
-design/             # ecrãs de referência do Figma
-docs/               # modelo de dados e notas técnicas
-```
-Site estático em HTML/CSS/JS, sem build. Funciona aberto localmente e no Cloudflare Pages.
+O site faz parte da **plataforma `*.frisk.pt`**: vários sites que partilham a mesma infraestrutura (GitHub + Supabase + Cloudflare) e o mesmo sistema de contas. Um utilizador cria a conta uma vez e usa-a em todos os sites. Os dados do Parkncharge ficam separados dos outros sites.
 
-## Identidade (do Figma)
-| Token | Cor |
+A estrutura segue a do Airbnb (organização e fluxos: pesquisa, categorias, cartões, modo anfitrião, assistente de publicação). A identidade visual é a do Figma **"First teste parkncharge"** (ecrãs em [`design/`](design/)).
+
+Plano de versões: [ROADMAP.md](ROADMAP.md) · Histórico e regras que não se podem quebrar: [PATCH NOTES.md](PATCH%20NOTES.md) · Base de dados: [docs/modelo-dados.md](docs/modelo-dados.md).
+
+---
+
+## Como está construído
+
+| Peça | Para quê |
 |---|---|
-| Azul principal | `#436E91` |
-| Creme (campos/chips) | `#F3E9B5` |
-| Laranja (destaques, pinos) | `#E95322` |
-| Fundo | `#F5F5F5` |
-| Texto | `#3A1D17` |
+| **HTML + CSS + JavaScript puro** | Uma página HTML por ecrã, com CSS e JS comuns em `assets/`. Sem framework nem passo de build. |
+| **GitHub** (`Sebalca/parkncharge`) | Código e versões. Cada `push` para `main` publica o site. |
+| **Cloudflare Pages** (projeto `parkncharge`) | Serve a raiz do repositório em `parkncharge.frisk.pt` e `parkncharge.pages.dev` (DNS, SSL, CDN). |
+| **Supabase** (projeto partilhado **"Sites"**) | Contas (login), base de dados PostgreSQL (schema `parkncharge`) e Storage (fotografias). |
+| **plataforma-core** (`auth.js`) | Módulo partilhado por todos os sites: cliente Supabase com a chave **pública** e sessão guardada num cookie de `.frisk.pt`, para o login valer em todos os subdomínios. |
+| **Leaflet + OpenStreetMap** | Mapa para marcar o lugar (tiles OSM) e pesquisa de moradas (Nominatim). Gratuitos, sem chave. |
 
-## Deploy (Cloudflare Pages)
-1. Cloudflare → Workers & Pages → Create → Pages → Connect to Git → `parkncharge`.
-   - Framework preset: *None* · Build command: *(vazio)* · Output directory: `/`
-2. Custom domains → `parkncharge.frisk.pt`.
-3. Supabase (projeto partilhado "Sites"):
-   - Authentication → URL Configuration → Redirect URLs: `https://*.frisk.pt/**` e `https://parkncharge.pages.dev/**` ✔
-   - Integrations → Data API → Exposed schemas: `parkncharge` ✔
+### Ficheiros
 
-## Segurança
-- Só a chave pública (publishable/anon) do Supabase no frontend; tudo protegido por RLS.
-- Service keys e segredos apenas em GitHub Secrets / variáveis da Cloudflare.
+```
+index.html          Explorar: pesquisa, categorias, lugares por zona (público)
+login.html          entrar / criar conta / recuperar palavra-passe
+perfil.html         perfil e menu (modo condutor ou anfitrião)
+anfitriao.html      modo anfitrião: os meus lugares, dados de anfitrião, Hoje, Calendário
+publicar.html       assistente de publicação/edição de um lugar (9 passos)
+admin.html          aprovação de anúncios (só administradores)
+favoritos.html      em breve (v0.6)
+reservas.html       em breve (v0.4)
+mensagens.html      em breve (v0.5)
+ajuda.html          centro de ajuda (âncoras #sobre, #anfitrioes, #carregadores, #cancelamentos, #seguranca)
+termos.html         termos (em preparação, v0.8)
+privacidade.html    privacidade / RGPD (em preparação, v0.8)
+assets/app.js       código comum (objeto global PNC)
+assets/style.css    design system
+assets/icon.svg     favicon
+design/             ecrãs de referência do Figma
+docs/modelo-dados.md          tabelas, regras e estado da base de dados
+supabase/migrations/          SQL aplicado no Supabase, por ordem
+tests/regressao.cjs           testes automáticos (Playwright)
+CLAUDE.md                     processo obrigatório para cada alteração
+PATCH NOTES.md                decisões fixas + histórico de versões
+ROADMAP.md                    plano de versões até à v1.0 (e v1.1)
+```
 
-## Versões
-- **v0.1** — design system, login partilhado (email + Google). Só PT. v0.1.1: estrutura à Airbnb.
-- **v0.2** — modo anfitrião, assistente de publicação, aprovação manual, schema `parkncharge`.
-- Ver [ROADMAP.md](ROADMAP.md) para v0.2 → v1.0 e v1.1 (Stripe).
+Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr) e `plataforma-core@main/auth.js` (jsDelivr). Se o Supabase não carregar (sem rede), as páginas públicas continuam a abrir, só que sem lugares.
+
+### Código comum (`assets/app.js` → `window.PNC`)
+
+| Função / constante | Para quê |
+|---|---|
+| `APP_VERSAO` | Versão atual (rodapé e Perfil). Atualizar em cada alteração. |
+| `renderChrome({active, host, header, footer})` | Desenha o cabeçalho (computador), a barra inferior (telemóvel) e o rodapé. `host: true` usa a barra do anfitrião. |
+| `db()` | Cliente Supabase já apontado para o schema `parkncharge` (`plataforma.schema('parkncharge')`). |
+| `photoUrl(path)`, `BUCKET` | URL pública de uma fotografia no bucket `parkncharge`. |
+| `currentUser()`, `requireLogin()`, `isAdmin()`, `displayName(user)` | Sessão. `requireLogin` envia para `login.html?next=…` e volta depois de entrar. O nome e o avatar vêm de `public.profiles`. |
+| `CATEGORIES`, `VEHICLES`, `SPOT_TYPES`, `ZONES`, `CHARGERS`, `WEEKDAYS`, `STATUS` | Catálogos usados em todo o site (categorias com a função `match` do filtro, tipos de veículo, zonas do Porto…). |
+| `icon(nome)`, `LOGO` | Ícones SVG inline e logótipo. |
+| `euro()`, `mainPrice()`, `distance()`, `walkText()`, `esc()` | Formatação de preços (pt-PT), distância (haversine), minutos a pé e escape de HTML. |
+| `toast()`, `authError()`, `dbError()` | Mensagens ao utilizador, com os erros do Supabase traduzidos. As mensagens dos triggers já vêm em português. |
+
+### Design system (`assets/style.css`)
+
+- Cores do Figma como variáveis CSS: `--pnc-blue #436E91`, `--pnc-cream #F3E9B5` (campos e chips), `--pnc-orange #E95322` (ações principais, pinos), `--pnc-bg #F5F5F5`, `--pnc-text #3A1D17`.
+- Letras: Josefin Sans (títulos) e Lato (texto), do Google Fonts.
+- Padrão dos ecrãs: zona azul no topo e uma "folha" clara com cantos arredondados por cima, como no Figma.
+- Componentes: `.searchbar`, `.cats/.cat`, `.card`, `.rail`, `.grid-cards`, `.btn` (`.orange`, `.ghost`, `.danger`, `.small`), `.chip`, `.input`, `.switch`, `.option`, `.host-item`, `.status`, `.nav`, `.site-footer`, `.toast`.
+- Primeiro para telemóvel. A partir de 900 px aparece o cabeçalho e o rodapé, a barra inferior esconde-se, a pesquisa mostra os três campos e as grelhas passam a 4–5 colunas.
+
+---
+
+## Como funciona o site
+
+### Explorar (`index.html`) — condutor, público
+- **Pesquisa** em pílula (Onde · Quando · Veículo) que abre um painel com:
+  - zona, rua ou local (com sugestões das zonas do Porto) e botão "usar a minha localização";
+  - início e fim;
+  - veículo: Mota, Carro, Carrinha, Autocarro, Camião ou Autocaravana.
+- A pesquisa fica no endereço (`?onde=Boavista&inicio=…&fim=…&veiculo=carrinha&cat=carregador`), por isso pode ser partilhada.
+- **Categorias** em barra horizontal: Todos, Com carregador, Coberto, Subterrâneo, Fechado, Acesso fácil, Lugar só seu, Mensal, Motas, Carrinhas.
+- **Lugares:** lê até 200 anúncios **ativos** do Supabase e filtra no browser (veículo, categoria, texto na zona ou título).
+  - Sem pesquisa, aparecem em **carrosséis por zona**; com pesquisa ou categoria, numa **grelha**.
+  - Com "perto de mim", ficam ordenados pela distância à posição aproximada e mostram os minutos a pé.
+  - Cada cartão mostra a foto de capa, o selo "Carregador", ❤ (favoritos, só visual até à v0.6), título, zona, coberto/carregador e o preço principal (hora → dia → mês).
+- **Por fazer:** as datas ainda não filtram (v0.3 filtra pelo horário e v0.4 pelas reservas). Mapa e página do lugar chegam na v0.3/v0.4.
+- Destaque "Tem um lugar livre?" e lista de zonas do Porto (links de pesquisa, também para SEO).
+
+### Conta (`login.html`, `perfil.html`)
+- Separadores **Entrar / Criar conta**, com email + palavra-passe e **Continuar com Google**.
+  - Ao criar conta, o nome vai para `public.profiles` (global da plataforma).
+  - Se o Supabase pedir confirmação de email, aparece um aviso.
+- **Recuperar palavra-passe:** envia um email com um link que volta a `login.html`, onde se define a nova palavra-passe (evento `PASSWORD_RECOVERY`).
+- `?next=/…` volta à página de onde se veio; só aceita caminhos internos.
+- **Perfil:** cartão com nome, email e avatar, e o botão **Mudar para anfitrião / condutor**. O menu tem:
+  - como condutor: reservas e favoritos;
+  - como anfitrião: os meus lugares, dados de anfitrião e publicar;
+  - para administradores: "Aprovação de anúncios";
+  - ajuda e terminar sessão.
+
+### Modo anfitrião (`anfitriao.html`)
+- Barra inferior própria: **Hoje, Calendário, Lugares, Mensagens, Menu**.
+- **Primeira vez:** escolher **Particular** ou **Empresa** (nome obrigatório, NIF opcional com 9 algarismos) → `parkncharge.host_profiles`. Pode ser alterado em "Dados de anfitrião" (`?v=perfil`).
+- **Os meus lugares:** lista com a foto, o estado e ações que dependem do estado.
+
+  | Estado | Significado | Ações |
+  |---|---|---|
+  | Rascunho | ainda não enviado | Continuar, Apagar |
+  | Em análise | à espera de aprovação | Ver, Retirar da análise |
+  | Ativo | visível no Explorar | Editar, Pausar |
+  | Recusado | com o motivo à vista | Corrigir e reenviar, Apagar |
+  | Pausado | escondido pelo anfitrião | Reativar, Editar |
+
+- **Hoje** e **Calendário:** por agora só explicam que chegam com as reservas (v0.4).
+
+### Publicar um lugar (`publicar.html`)
+Assistente em 9 passos, com barra de progresso. **Cada passo é guardado ao carregar em "Seguinte"**, por isso um rascunho pode ser continuado mais tarde (`?id=…`).
+
+1. **Tipo:** Garagem, Box, Lugar coberto, Lugar descoberto ou Parque. Preenche os atributos prováveis por defeito.
+2. **Localização:**
+   - pesquisa de morada (Nominatim, só Portugal) ou clique/arrasto do marcador no mapa;
+   - código postal e zona;
+   - a morada e as coordenadas vão para `listing_private` (privado).
+3. **Características:** veículos aceites, coberto, subterrâneo, fechado, lugar só seu, acesso fácil, altura máxima.
+4. **Carregador:** tipo (Schuko, Tipo 2, CCS, CHAdeMO, outro), potência, energia incluída ou preço por kWh.
+5. **Fotografias:** 1 a 6.
+   - Cada foto é reduzida no browser (máx. 1600 px, JPEG) e enviada para `parkncharge/{user}/{lugar}/{uuid}.jpg`.
+   - Pode-se apagar e escolher a capa (★).
+6. **Título** (sugerido a partir do tipo, zona e carregador) e descrição.
+7. **Horário semanal:** dia a dia, com as opções "24 h" e os atalhos "24 h, todos os dias" e "Dias úteis 8h–20h".
+8. **Preços:** hora, dia e/ou mês (pelo menos um). Escolher entre **reserva instantânea** e **aprovo cada pedido**.
+9. **Rever** tudo, acrescentar as **instruções de acesso** (privadas) e **Enviar para aprovação**. Num anúncio ativo, o botão é "Guardar alterações".
+
+### Aprovação (`admin.html`) — só administradores
+- Só entra quem tem `public.profiles.is_admin = true`. A página verifica com a função `parkncharge.is_admin()`, e as regras do servidor também.
+- Filtros Pendentes / Ativos / Recusados / Pausados. Cada anúncio mostra:
+  - fotos (clicáveis);
+  - morada com link para o mapa;
+  - anfitrião (particular ou empresa, NIF);
+  - atributos, carregador, horário, tipo de reserva, descrição e instruções de acesso.
+- **Aprovar** publica o anúncio (grava `approved_at` e `approved_by`). **Recusar** e **Retirar** pedem sempre um motivo, que o anfitrião vê.
+
+---
+
+## Dados
+
+Tudo no projeto Supabase partilhado **"Sites"** (`aehitgqsfcpzuunyzpsh`), em duas partes:
+
+| Dado | Onde |
+|---|---|
+| Nome, email, avatar (globais da conta frisk.pt) | `auth.users` + `public.profiles` |
+| Registo do site na plataforma | `public.sites` (id `parkncharge`) |
+| Perfil de anfitrião (particular/empresa, NIF) | `parkncharge.host_profiles` |
+| Anúncios (dados públicos, estado, preços, atributos, posição aproximada) | `parkncharge.listings` |
+| Morada exata, coordenadas, instruções de acesso | `parkncharge.listing_private` |
+| Fotografias (caminho e ordem) | `parkncharge.listing_photos` + bucket Storage `parkncharge` |
+| Horário semanal | `parkncharge.listing_schedule` |
+
+Descrição completa das colunas e das próximas tabelas (reservas, mensagens, avaliações, favoritos): [docs/modelo-dados.md](docs/modelo-dados.md). O SQL está em [`supabase/migrations/`](supabase/migrations/).
+
+### Regras no servidor (triggers)
+- **`listings_guard`** (antes de inserir/alterar um anúncio):
+  - o dono nunca muda;
+  - quem não é admin só pode passar **rascunho/recusado → pendente**, **pendente → rascunho** e **ativo ↔ pausado**, por isso nunca se auto-aprova;
+  - ao enviar para análise, verifica título, tipo, zona, pelo menos um preço, morada, pelo menos uma foto e os dados do carregador (se tiver);
+  - quando o admin aprova, grava quem e quando.
+- **`sync_approx_location`:** ao gravar a morada, calcula `approx_lat/approx_lng` numa grelha de ~300 m. É esta posição que o público vê.
+- **`photos_limit` / `photos_cover`:** máximo de 6 fotografias; a de menor `position` passa a `cover_photo`.
+
+### Segurança (RLS)
+| Tabela | Quem lê | Quem escreve |
+|---|---|---|
+| `listings` | todos veem os **ativos**; o dono vê os seus; o admin vê tudo | o dono (e o admin, para aprovar) |
+| `listing_private` | só o dono e o admin | só o dono |
+| `listing_photos`, `listing_schedule` | quem pode ver o anúncio | só o dono |
+| `host_profiles` | o próprio e o admin | o próprio |
+| Storage `parkncharge` | leitura pública (fotos dos anúncios) | só na pasta `{user_id}/` do próprio; máx. 5 MB; JPEG, PNG ou WebP |
+
+- As regras foram testadas com SQL como anónimo, outro utilizador, dono e admin.
+- No código só existe a **chave pública** do Supabase (via `plataforma-core`). Service keys e passwords **nunca** vão para o GitHub nem para o browser.
+
+---
+
+## Desenvolvimento
+
+### Processo (ver `CLAUDE.md`)
+1. Esclarecer o pedido antes de mexer: perguntas e sugestões.
+2. Confirmar que não contraria nenhuma **decisão fixa** do `PATCH NOTES.md`; se contrariar, avisar e pedir confirmação.
+3. Implementar. Mudanças na base de dados vão numa **nova** migração em `supabase/migrations/`, aplicada no Supabase, com a RLS testada.
+4. Correr os testes (0 falhas).
+5. Registar no `PATCH NOTES.md`:
+   - letra seguinte (`v0.2a` → `v0.2b`) para ajustes;
+   - `v0.3`, `v0.4`… para versões do roadmap, marcadas também no `ROADMAP.md`.
+6. Atualizar `APP_VERSAO` em `assets/app.js` e, se preciso, este README e o modelo de dados.
+7. Commit e push para `main` (publica sozinho) e verificar o site.
+
+### Testes
+```bash
+NODE_PATH=$(npm root -g) node tests/regressao.cjs
+```
+- Os testes abrem o site com o Playwright (Chromium), **sem sessão e sem rede**: o Supabase, as letras e os mapas são bloqueados.
+- Verificam as páginas (navegação, pesquisa, categorias, carrosséis/grelha, erros de JavaScript) e as regras do servidor no SQL das migrações.
+- Cada teste tem o código de uma **decisão fixa** (D01, D21, D31…): se um falhar, alguma regra combinada foi quebrada.
+
+### Correr localmente
+Servir a pasta (`python3 -m http.server` ou `npx serve .`) e abrir `http://localhost:8000`.
+- O login e os dados precisam de rede (Supabase).
+- Em `localhost` a sessão não é partilhada com os outros sites, porque o cookie é do domínio `.frisk.pt`.
+
+### Publicação
+- **Cloudflare Pages** (projeto `parkncharge`, ligado ao GitHub): cada push para `main` publica em ~1 minuto.
+- Configuração: sem framework, sem comando de build, pasta de saída `/`.
+- Domínio personalizado `parkncharge.frisk.pt` (CNAME para `parkncharge.pages.dev`).
+
+### Supabase (configuração feita)
+- Schema `parkncharge` criado com `supabase/migrations/20260926_v02_listings.sql` e **exposto** em Integrations → Data API → Exposed schemas.
+- Authentication → URL Configuration → Redirect URLs: `https://*.frisk.pt/**` e `https://parkncharge.pages.dev/**`. São necessários para o Google, a confirmação de email e a recuperação de palavra-passe.
+- Administradores: `public.profiles.is_admin = true`.
+- Pendente (plataforma): ativar "Leaked password protection" em Authentication → Attack Protection.
+
+### Serviços externos
+- jsDelivr: `@supabase/supabase-js@2`, `sebalca/plataforma-core@main/auth.js`, `leaflet@1.9.4`.
+- Google Fonts: Josefin Sans e Lato.
+- OpenStreetMap: tiles do mapa e Nominatim (pesquisa de moradas). O uso é leve: uma pesquisa por clique, só no assistente. Se o tráfego crescer, passar para um fornecedor com chave.
+
+### Limitações conhecidas (v0.2a)
+- Favoritos, Reservas e Mensagens são páginas "em breve".
+- As datas da pesquisa ainda não filtram.
+- A ordenação "perto de mim" usa a posição aproximada (~300 m).
+- Termos e privacidade ainda por escrever (antes da beta, v0.8).

@@ -60,7 +60,7 @@
           ${item('/ajuda.html', 'help', 'Centro de ajuda')}
           <li><button id="logout" type="button">${I('logout')}<span>Terminar sessão</span></button></li>
         </ul>
-        <p class="muted" style="font-size:13px;margin-top:20px">Nome e fotografia são os da sua conta frisk.pt.</p>`;
+        <p class="muted" style="font-size:13px;margin-top:20px">Nome e fotografia são os da sua conta frisk.pt. · Parkncharge ${PNC.APP_VERSAO}</p>`;
       $('logout').onclick = async () => { await Auth.signOut(); location.replace('/'); };
     })();
   </script>
