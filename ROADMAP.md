@@ -40,12 +40,18 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 - [x] Aprovação manual (`admin.html`): aprovar, recusar com motivo, retirar
 - [x] Morada exata privada; no site só a posição aproximada (~300 m) e a zona
 - [x] Lugares aprovados aparecem no início, agrupados por zona
+- [x] Menu da conta em janela no canto superior direito *(v0.2b)*
+- [x] 12 garagens de exemplo em São Mamede de Infesta e arredores, com selo "Exemplo" e ocupação simulada *(v0.2b — apagar antes da beta)*
 
 ## v0.3 — Home e pesquisa (lado do condutor)
-- [ ] Home "Close to you": mapa (Leaflet + OpenStreetMap) com pinos e tempo a pé, lista em cartões
-- [ ] Localização atual ou morada pesquisada
-- [ ] Filtros do Figma: categorias, ordenação (melhor avaliados, mais usados, proximidade), veículo, hora de início/fim
-- [ ] Pesquisa por proximidade com PostGIS
+- [x] Home "Perto de si": mapa (Leaflet + OpenStreetMap) com as disponíveis mais próximas (pinos com preço, ⚡ com carregador) e tempo a pé *(v0.2b)*
+- [x] Lista em cartões das garagens da localidade (mesmo ocupadas), com estado Disponível / Ocupada / Fechada *(v0.2b)*
+- [x] Localização atual: São Mamede de Infesta (fictícia) + botão "usar a minha localização" (GPS) *(v0.2b)*
+- [x] Morada/zona pesquisada (grelha de resultados) *(v0.1a)*
+- [x] Filtros: categorias e veículo *(v0.1a)*
+- [ ] Filtros: ordenação (melhor avaliados, mais usados, proximidade) e hora de início/fim a filtrar pelo horário
+- [ ] Mapa também nos resultados da pesquisa (alternar lista ↔ mapa no telemóvel)
+- [ ] Pesquisa por proximidade no servidor (PostGIS) — por agora a distância é calculada no browser
 
 ## v0.4 — Página do lugar e reservas
 - [ ] Página do lugar: fotos, atributos, horário, avaliação média, comentários, botão "Reservar"
@@ -71,6 +77,7 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 - [ ] Páginas de ajuda, FAQ e contacto
 
 ## v0.8 — Beta fechada no Porto
+- [ ] Apagar as garagens de exemplo (`delete from parkncharge.listings where is_demo;`) e retirar a ocupação simulada
 - [ ] PWA instalável (manifest, ícones, offline básico)
 - [ ] Termos de utilização e política de privacidade (RGPD)
 - [ ] Pagamento combinado entre as partes (indicação clara na reserva)

@@ -32,8 +32,11 @@ Regras que o Sebastião pediu explicitamente. Antes de qualquer alteração ou n
 - D21 Barra inferior (telemóvel), como no Airbnb: **Explorar, Favoritos, Reservas, Mensagens, Perfil**. No computador: cabeçalho com "Arrendar o meu lugar" e menu do perfil.
 - D22 Pesquisa em pílula no topo: **Onde · Quando (início e fim) · Veículo**, que abre um painel. Substitui o "Good Morning" do Figma.
 - D23 O carregador é uma **categoria/filtro** ("Com carregador"), sem separador próprio. Categorias: Todos, Com carregador, Coberto, Subterrâneo, Fechado, Acesso fácil, Lugar só seu, Mensal, Motas, Carrinhas.
-- D24 Sem pesquisa: lugares em carrosséis por zona ("Lugares em …"). Com pesquisa ou categoria: grelha.
+- D24 Explorar sem pesquisa: **mapa "Perto de si"** com as garagens disponíveis mais próximas; por baixo, **todas as garagens da localidade onde estou (mesmo ocupadas)**; no fim, carrosséis das outras zonas. Com pesquisa por texto: grelha. Categoria e veículo filtram tudo. (atualizada v0.2b — antes só carrosséis por zona)
 - D25 A versão do site aparece no rodapé.
+- D27 O botão do canto superior direito (☰ + avatar) abre uma **janela** (como nas Finanças), não uma página: Entrar/Criar conta ou nome, Mudar para anfitrião/condutor, atalhos, Aprovação (admin), Perfil, Ajuda, Terminar sessão, e a versão no canto. Fecha ao clicar fora, mas não quando se carrega dentro e se larga fora. Existe também no telemóvel (cabeçalho compacto).
+- D28 Localização por defeito: **São Mamede de Infesta** (fictícia, por agora). "Usar a minha localização" passa ao GPS real e descobre a localidade.
+- D29 Estado de cada lugar: **Disponível agora** (aberto pelo horário e livre), **Ocupada** (ocupação simulada até às reservas da v0.4) ou **Fechada agora** (fora do horário, com a próxima abertura). O mapa mostra só as disponíveis (até 8, num raio de 5 km).
 - D26 `assets/app.js` e `assets/style.css` são carregados com `?v=<versão>` em todas as páginas, para os visitantes receberem logo a versão nova.
 
 **Anfitrião**
@@ -45,12 +48,25 @@ Regras que o Sebastião pediu explicitamente. Antes de qualquer alteração ou n
 - D35 Serviços extra "Clean Up" (lavagem) e "Workshop" (oficina), que estão no Figma, ficam para depois da v1.0.
 - D36 Recusar um anúncio exige um motivo, que o anfitrião vê na lista dos seus lugares.
 
+**Dados de exemplo**
+- D50 Garagens de exemplo (12, em São Mamede de Infesta e arredores) têm sempre o selo **"Exemplo"**, ilustrações próprias e moradas sem número. Só o admin pode criar exemplos ou ocupação simulada (regra no servidor). Apagam-se todas antes da beta (v0.8). Script: `supabase/seed/exemplos_sao_mamede.sql`.
+
 **Segurança**
 - S01 Nunca pôr chaves privadas no código (só a chave pública do Supabase, via `plataforma-core`). As regras de acesso são RLS no servidor.
 
 ---
 
 ## Histórico
+
+### v0.2b — 27/09/2026
+- Menu da conta: o botão do canto superior direito abre uma janela (antes ia para a página Perfil). No telemóvel aparece um cabeçalho compacto com o mesmo botão. O cabeçalho completo passa a aparecer a partir de 700 px (antes 900 px).
+- Explorar (D24 alterada, confirmado): mapa "Perto de si" com as garagens disponíveis mais próximas (pinos com preço, laranja ⚡ se tiver carregador, ponto azul para a localização), lista "Garagens em <localidade>" com todas, mesmo ocupadas, e carrosséis das outras zonas.
+- Localização fixa em São Mamede de Infesta (fictícia) com botão "Usar a minha localização" (GPS + localidade pelo OpenStreetMap).
+- Estado em cada cartão: Disponível agora / Ocupada / Fechada agora · abre às …
+- 12 garagens de exemplo (7 em São Mamede de Infesta, 5 em Senhora da Hora, Custóias, Paranhos, Leça do Balio e Matosinhos), 2 ocupadas, com ilustrações em `assets/demo/`.
+- Base de dados: colunas `is_demo` e `demo_occupied` (migração `20260927_v02b_demo.sql`), protegidas no trigger. Testado: um utilizador normal não as consegue ligar nem mexer em exemplos alheios.
+- Grelhas sem transbordar em ecrãs médios (colunas `minmax(0, 1fr)`).
+- Roadmap: marcados os pontos da v0.3 já feitos.
 
 ### v0.2a — 27/09/2026
 - README reescrito: objetivo, arquitetura, como funciona cada página, base de dados, segurança, deploy e processo de desenvolvimento.

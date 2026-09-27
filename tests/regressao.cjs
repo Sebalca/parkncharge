@@ -52,8 +52,41 @@ const CSS = ler('assets/style.css');
   const cats = await ev(() => [...document.querySelectorAll('.cat span')].map(s => s.textContent));
   t('D23', 'carregador é categoria, sem separador "Carregar" próprio', cats[0] === 'Todos' && cats.includes('Com carregador') && !(await ev(() => [...document.querySelectorAll('button,a')].some(x => x.textContent.trim() === 'Carregar'))), cats);
   await ev(() => { window.__l = [{ id: '1', title: 'A', zone: 'Boavista', vehicle_types: ['carro'], has_charger: true, price_hour: 1 }, { id: '2', title: 'B', zone: 'Baixa', vehicle_types: ['carro'], price_day: 5 }]; });
-  t('D24', 'sem pesquisa: carrosséis por zona', await ev(() => { listings = window.__l; state.cat = 'todos'; render(); return document.querySelectorAll('.rail').length === 2 && /Lugares em Boavista/.test(document.querySelector('#content').innerText); }));
-  t('D24', 'com categoria: grelha filtrada', await ev(() => { state.cat = 'carregador'; render(); return document.querySelectorAll('.grid-cards .card').length === 1; }));
+  t('D28', 'localização por defeito: São Mamede de Infesta (fictícia) + botão GPS', await ev(() => state.locality === 'São Mamede de Infesta' && PNC.DEFAULT_LOC.locality === 'São Mamede de Infesta' && !state.gps));
+  await ev(() => {
+    const h24 = [0, 1, 2, 3, 4, 5, 6].map(w => ({ weekday: w, opens_at: '00:00:00', closes_at: '24:00:00' }));
+    window.__l = [
+      { id: '1', title: 'A', zone: 'São Mamede de Infesta', approx_lat: 41.195, approx_lng: -8.61, vehicle_types: ['carro'], has_charger: true, price_hour: 1, is_demo: true, listing_schedule: h24 },
+      { id: '2', title: 'B', zone: 'São Mamede de Infesta', approx_lat: 41.192, approx_lng: -8.613, vehicle_types: ['carro'], price_hour: 1, demo_occupied: true, listing_schedule: h24 },
+      { id: '3', title: 'C', zone: 'Boavista', approx_lat: 41.16, approx_lng: -8.64, vehicle_types: ['carro'], price_day: 5, listing_schedule: h24 },
+      { id: '4', title: 'D', zone: 'Baixa', approx_lat: 41.146, approx_lng: -8.61, vehicle_types: ['carro'], price_day: 5, listing_schedule: [] },
+    ];
+    listings = window.__l; state.cat = 'todos'; state.where = ''; render();
+  });
+  t('D24', 'Explorar: mapa "Perto de si" + garagens da localidade (mesmo ocupadas) + carrosséis das outras zonas', await ev(() => {
+    const c = document.querySelector('#content'), txt = c.innerText;
+    return !!c.querySelector('#sec-map #map') && /Garagens em São Mamede de Infesta/.test(txt) && c.querySelectorAll('#sec-local .card').length === 2
+      && /Ocupada/.test(c.querySelector('#sec-local').innerText) && c.querySelectorAll('.rail').length === 2 && /Lugares em Boavista/.test(txt)
+      && c.querySelector('#sec-map').compareDocumentPosition(c.querySelector('#sec-local')) & Node.DOCUMENT_POSITION_FOLLOWING;
+  }));
+  t('D24', 'com pesquisa por texto: grelha de resultados', await ev(() => { state.where = 'Boavista'; render(); const ok = document.querySelectorAll('.grid-cards .card').length === 1; state.where = ''; render(); return ok; }));
+  t('D24', 'categoria filtra todas as secções', await ev(() => { state.cat = 'carregador'; render(); const n = document.querySelectorAll('#content .card').length; state.cat = 'todos'; render(); return n === 1; }));
+  t('D29', 'estado: Disponível (aberto e livre) / Ocupada (simulada) / Fechada (horário)', await ev(() => {
+    const [a, b, , d] = window.__l;
+    return PNC.availability(a).key === 'disponivel' && PNC.availability(b).key === 'ocupada' && PNC.availability(d).key === 'fechada'
+      && PNC.openNow([{ weekday: 0, opens_at: '08:00', closes_at: '20:00' }], new Date(2026, 8, 28, 9)) && !PNC.openNow([{ weekday: 0, opens_at: '08:00', closes_at: '20:00' }], new Date(2026, 8, 28, 21));
+  }));
+  t('D50', 'garagens de exemplo com selo "Exemplo"', await ev(() => [...document.querySelectorAll('#sec-local .card')].filter(c => /Exemplo/.test(c.innerText)).length === 1));
+  t('D50', 'só o admin cria exemplos ou ocupação simulada (regra no servidor)', /new\.is_demo := false; new\.demo_occupied := false;/.test(SQL) && /new\.is_demo := old\.is_demo;/.test(SQL));
+
+  console.log('Menu da conta');
+  await ev(() => document.querySelector('#acct-btn').click()); await p.waitForTimeout(100);
+  t('D27', 'canto superior direito abre uma janela (não uma página)', new URL(p.url()).pathname === '/' && await ev(() => !document.querySelector('#acct-menu').classList.contains('hidden')));
+  const bm = await p.locator('#acct-menu').boundingBox();
+  await p.mouse.move(bm.x + 20, bm.y + 20); await p.mouse.down(); await p.mouse.move(bm.x + 20, bm.y + bm.height + 120); await p.mouse.up();
+  t('D27', 'carregar dentro e largar fora não fecha', await ev(() => !document.querySelector('#acct-menu').classList.contains('hidden')));
+  await p.mouse.click(10, 700);
+  t('D27', 'clicar fora fecha', await ev(() => document.querySelector('#acct-menu').classList.contains('hidden')));
   const V = ler('assets/app.js').match(/APP_VERSAO = 'v([^']+)'/)[1];
   t('D26', 'app.js e style.css carregados com ?v= da versão atual (evita cache antiga)', PAGINAS.every(f => (ler(f).match(/assets\/(app\.js|style\.css)(\?v=[^"]*)?"/g) || []).every(x => x.includes('?v=' + V + '"'))),
     PAGINAS.filter(f => (ler(f).match(/assets\/(app\.js|style\.css)(\?v=[^"]*)?"/g) || []).some(x => !x.includes('?v=' + V + '"'))));

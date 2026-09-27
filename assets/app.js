@@ -2,7 +2,7 @@
 // Usa o auth.js partilhado (plataforma-core): window.Auth e window.plataforma.
 (function () {
   // Versão atual — atualizar em cada alteração (ver PATCH NOTES.md)
-  const APP_VERSAO = 'v0.2a';
+  const APP_VERSAO = 'v0.2b';
 
   const ICONS = {
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
@@ -73,9 +73,11 @@
           ${host
             ? '<a href="/">Mudar para condutor</a>'
             : '<a href="/anfitriao.html" id="hdr-host">Arrendar o meu lugar</a>'}
-          <a class="hdr-profile" href="/perfil.html${host ? '?modo=anfitriao' : ''}" aria-label="Perfil">${icon('menu')}${icon('user')}</a>
-        </nav>`;
+          <button class="hdr-profile" id="acct-btn" type="button" aria-label="Menu da conta" aria-haspopup="true" aria-expanded="false">${icon('menu')}<span class="hdr-avatar" id="acct-avatar">${icon('user')}</span></button>
+        </nav>
+        <div class="acct-menu hidden" id="acct-menu" role="menu"></div>`;
       document.body.prepend(h);
+      setupAccountMenu(host);
     }
     // Barra inferior
     const items = host ? HOST_NAV : GUEST_NAV;
@@ -102,11 +104,66 @@
     document.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = icon(el.dataset.icon));
   }
 
+
+  // ---------------- Menu da conta (janela no canto superior direito, como nas Finanças) ----------------
+  function setupAccountMenu(host) {
+    const btn = document.getElementById('acct-btn'), menu = document.getElementById('acct-menu');
+    let downInside = false, built = false;
+    const close = () => { menu.classList.add('hidden'); btn.setAttribute('aria-expanded', 'false'); };
+    const open = async () => {
+      menu.classList.remove('hidden'); btn.setAttribute('aria-expanded', 'true');
+      if (!built) { menu.innerHTML = '<div class="spinner"></div>'; await buildAccountMenu(menu, host); built = true; }
+    };
+    btn.addEventListener('click', () => menu.classList.contains('hidden') ? open() : close());
+    // fecha ao clicar fora, mas não quando se carrega dentro e se larga fora
+    document.addEventListener('pointerdown', e => { downInside = menu.contains(e.target) || btn.contains(e.target); });
+    document.addEventListener('click', e => {
+      if (menu.classList.contains('hidden') || downInside || menu.contains(e.target) || btn.contains(e.target)) return;
+      close();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+    // avatar no botão, se houver sessão
+    currentUser().then(async u => {
+      if (!u) return;
+      const { nome, avatar } = await displayName(u);
+      const el = document.getElementById('acct-avatar');
+      el.className = 'hdr-avatar on';
+      el.style.backgroundImage = avatar ? `url('${esc(avatar)}')` : '';
+      el.textContent = avatar ? '' : (nome || '?').trim().charAt(0).toUpperCase();
+    });
+  }
+  async function buildAccountMenu(menu, host) {
+    const u = await currentUser();
+    const a = (href, ic, label) => `<a role="menuitem" href="${href}">${icon(ic)}<span>${label}</span></a>`;
+    const ver = `<span class="acct-ver">${APP_VERSAO}</span>`;
+    if (!u) {
+      const next = encodeURIComponent(location.pathname + location.search);
+      menu.innerHTML = `${ver}
+        <a role="menuitem" class="acct-strong" href="/login.html?next=${next}">Entrar</a>
+        <a role="menuitem" href="/login.html?modo=registo&next=${next}">Criar conta</a>
+        <hr>${a('/anfitriao.html', 'garage', 'Arrendar o meu lugar')}${a('/ajuda.html', 'help', 'Centro de ajuda')}`;
+      return;
+    }
+    const [{ nome }, admin] = await Promise.all([displayName(u), isAdmin()]);
+    menu.innerHTML = `${ver}
+      <div class="acct-head"><b>${esc(nome)}</b><small>${esc(u.email)}</small></div>
+      ${host ? a('/', 'swap', 'Mudar para condutor') : a('/anfitriao.html', 'swap', 'Mudar para anfitrião')}
+      <hr>
+      ${host ? a('/anfitriao.html', 'garage', 'Os meus lugares') + a('/publicar.html', 'plus', 'Publicar um novo lugar') + a('/anfitriao.html?v=perfil', 'user', 'Dados de anfitrião')
+             : a('/reservas.html', 'bookings', 'Reservas') + a('/favoritos.html', 'heart', 'Favoritos') + a('/mensagens.html', 'chat', 'Mensagens')}
+      ${admin ? a('/admin.html', 'shield', 'Aprovação de anúncios') : ''}
+      <hr>${a('/perfil.html' + (host ? '?modo=anfitriao' : ''), 'user', 'Perfil')}${a('/ajuda.html', 'help', 'Centro de ajuda')}
+      <button role="menuitem" type="button" id="acct-logout">${icon('logout')}<span>Terminar sessão</span></button>`;
+    menu.querySelector('#acct-logout').onclick = async () => { await Auth.signOut(); location.replace('/'); };
+  }
+
   // ---------------- Dados ----------------
   const db = () => window.plataforma ? window.plataforma.schema('parkncharge') : null;
   const BUCKET = 'parkncharge';
   function photoUrl(path) {
-    if (!path || !window.plataforma) return '';
+    if (!path) return '';
+    if (/^assets\//.test(path)) return '/' + path;          // ilustrações dos exemplos (no próprio site)
+    if (!window.plataforma) return '';
     return window.plataforma.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
   }
 
@@ -137,6 +194,36 @@
     } catch (e) { return { nome: nome || user.email.split('@')[0], avatar: '' }; }
   }
 
+
+  // ---------------- Localização e disponibilidade ----------------
+  // Localização por defeito (fictícia, por agora): São Mamede de Infesta. O botão "usar a minha localização" usa o GPS.
+  const DEFAULT_LOC = { lat: 41.1936, lng: -8.6117, locality: 'São Mamede de Infesta' };
+  const hhmm = t => (t || '').slice(0, 5);
+  // Aberto agora segundo o horário semanal (0 = segunda … 6 = domingo)
+  function openNow(schedule, d = new Date()) {
+    const wd = (d.getDay() + 6) % 7, now = d.toTimeString().slice(0, 5);
+    const s = (schedule || []).find(x => x.weekday === wd);
+    if (!s) return false;
+    const c = hhmm(s.closes_at) === '00:00' ? '24:00' : hhmm(s.closes_at);
+    return now >= hhmm(s.opens_at) && now < c;
+  }
+  // Próxima abertura, em texto ("abre hoje às 19:00", "abre segunda às 08:00")
+  function nextOpening(schedule, d = new Date()) {
+    const wd = (d.getDay() + 6) % 7, now = d.toTimeString().slice(0, 5);
+    for (let i = 0; i < 7; i++) {
+      const s = (schedule || []).find(x => x.weekday === (wd + i) % 7);
+      if (!s || (i === 0 && hhmm(s.opens_at) <= now)) continue;
+      return `abre ${i === 0 ? 'hoje' : i === 1 ? 'amanhã' : WEEKDAYS[(wd + i) % 7].toLowerCase()} às ${hhmm(s.opens_at)}`;
+    }
+    return '';
+  }
+  // Estado agora. Até às reservas (v0.4) a ocupação é simulada nos anúncios de exemplo (demo_occupied).
+  function availability(l, d = new Date()) {
+    if (l.demo_occupied) return { key: 'ocupada', label: 'Ocupada' };
+    if (!openNow(l.listing_schedule, d)) { const n = nextOpening(l.listing_schedule, d); return { key: 'fechada', label: 'Fechada agora' + (n ? ' · ' + n : '') }; }
+    return { key: 'disponivel', label: 'Disponível agora' };
+  }
+
   // ---------------- Catálogos ----------------
   const CATEGORIES = [
     { id: 'todos', label: 'Todos', icon: 'all' },
@@ -161,7 +248,7 @@
     ['lugar_descoberto', 'Lugar descoberto', 'Logradouro, pátio ou terreno'],
     ['parque', 'Parque', 'Vários lugares (empresas)'],
   ];
-  const ZONES = ['Baixa', 'Ribeira', 'Boavista', 'Foz do Douro', 'Campanhã', 'Antas', 'Paranhos', 'Ramalde', 'Cedofeita', 'Bonfim', 'Aldoar', 'Lordelo do Ouro', 'Massarelos', 'Matosinhos', 'Vila Nova de Gaia', 'Maia'];
+  const ZONES = ['São Mamede de Infesta', 'Senhora da Hora', 'Custóias', 'Leça do Balio', 'Baixa', 'Ribeira', 'Boavista', 'Foz do Douro', 'Campanhã', 'Antas', 'Paranhos', 'Ramalde', 'Cedofeita', 'Bonfim', 'Aldoar', 'Lordelo do Ouro', 'Massarelos', 'Matosinhos', 'Vila Nova de Gaia', 'Maia'];
   const CHARGERS = [['schuko', 'Tomada doméstica (Schuko)'], ['tipo2', 'Tipo 2 (Wallbox)'], ['ccs', 'CCS (rápido)'], ['chademo', 'CHAdeMO'], ['outro', 'Outro']];
   const WEEKDAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
   const STATUS = {
@@ -231,7 +318,7 @@
   }
 
   window.PNC = {
-    APP_VERSAO, icon, LOGO, renderChrome, db, photoUrl, BUCKET, currentUser, requireLogin, isAdmin, displayName,
+    APP_VERSAO, DEFAULT_LOC, openNow, nextOpening, availability, icon, LOGO, renderChrome, db, photoUrl, BUCKET, currentUser, requireLogin, isAdmin, displayName,
     CATEGORIES, VEHICLES, SPOT_TYPES, ZONES, CHARGERS, WEEKDAYS, STATUS,
     euro, mainPrice, esc, distance, walkText, toast, greeting, authError, dbError, SITE_ID: 'parkncharge',
   };

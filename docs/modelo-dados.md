@@ -15,6 +15,7 @@ separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque
 
 ## Estado
 - v0.2 (aplicado): `host_profiles`, `listings`, `listing_private`, `listing_photos`, `listing_schedule`, bucket `parkncharge`.
+- v0.2b (aplicado): `listings.is_demo` e `listings.demo_occupied` (exemplos e ocupação simulada, só o admin os liga). Exemplos em `supabase/seed/exemplos_sao_mamede.sql`.
 - A seguir: `bookings` (v0.4), `messages` (v0.5), `reviews` e `favorites` (v0.6).
 
 ## Regras nos triggers (v0.2)
@@ -30,7 +31,8 @@ separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque
   `vehicle_types[]` (moto, carro, carrinha, autocarro, camiao, autocaravana),
   `is_covered`, `is_underground`, `is_closed`, `is_solo`, `easy_entry`, `max_height_m`,
   `has_charger`, `charger_type`, `charger_kw`, `charge_price_mode` (incluido/a_parte), `charge_price_kwh`,
-  `price_hour`, `price_day`, `price_month`, `instant_book`, `cover_photo`, `submitted_at`, `approved_at`, `approved_by`
+  `price_hour`, `price_day`, `price_month`, `instant_book`, `cover_photo`, `submitted_at`, `approved_at`, `approved_by`,
+  `is_demo` (anúncio de exemplo), `demo_occupied` (ocupação simulada até às reservas)
 - **listing_private** — `listing_id`, `address`, `postal_code`, `lat`, `lng`, `access_instructions`
 - **listing_photos** — `id`, `listing_id`, `storage_path`, `position`
 - **listing_schedule** — `listing_id`, `weekday` (0–6), `opens_at`, `closes_at`

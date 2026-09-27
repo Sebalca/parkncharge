@@ -10,7 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=0.2a">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="assets/style.css?v=0.2b">
 </head>
 <body>
   <section class="hero">
@@ -76,12 +77,14 @@
     </div>
   </div>
 
-  <script src="assets/app.js?v=0.2a"></script>
+  <script src="assets/app.js?v=0.2b"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     PNC.renderChrome({ active: 'Explorar' });
     const $ = id => document.getElementById(id);
+    const esc = PNC.esc;
 
     // ---------- Estado da pesquisa (na URL, para partilhar) ----------
     const qs = new URLSearchParams(location.search);
@@ -91,7 +94,10 @@
       start: qs.get('inicio') || '',
       end: qs.get('fim') || '',
       veh: qs.get('veiculo') || 'carro',
-      near: null,
+      // Localização: por agora fixa em São Mamede de Infesta (fictícia); o GPS substitui-a quando pedido
+      near: { lat: PNC.DEFAULT_LOC.lat, lng: PNC.DEFAULT_LOC.lng },
+      locality: PNC.DEFAULT_LOC.locality,
+      gps: false,
     };
     function syncUrl() {
       const p = new URLSearchParams();
@@ -106,9 +112,10 @@
     function renderSummary() {
       const vehLabel = (PNC.VEHICLES.find(v => v[0] === state.veh) || [, 'Carro'])[1];
       const when = state.start ? `${fmtDate(state.start)}${state.end ? ' – ' + fmtDate(state.end) : ''}` : 'Qualquer altura';
-      $('sb-main').textContent = state.where || (state.near ? 'Perto de mim' : 'Onde vai estacionar?');
+      const where = state.where || state.locality;
+      $('sb-main').textContent = where;
       $('sb-sub').textContent = `${when} · ${vehLabel}`;
-      $('f-where').textContent = state.where || (state.near ? 'Perto de mim' : 'Pesquisar zona');
+      $('f-where').textContent = where;
       $('f-when').textContent = when;
       $('f-veh').textContent = vehLabel;
     }
@@ -128,6 +135,31 @@
     $('zones').innerHTML = PNC.ZONES.map(z => `<a href="/?onde=${encodeURIComponent(z)}">${z}<span>Estacionamento</span></a>`).join('');
     $('zone-list').innerHTML = PNC.ZONES.map(z => `<option value="${z}">`).join('');
 
+    // ---------- Localização (GPS real, a pedido) ----------
+    async function useGps() {
+      if (!navigator.geolocation) return PNC.toast('Localização indisponível neste dispositivo.', 'err');
+      PNC.toast('A obter a sua localização…');
+      navigator.geolocation.getCurrentPosition(async p => {
+        state.near = { lat: p.coords.latitude, lng: p.coords.longitude }; state.gps = true;
+        state.locality = await localityOf(state.near);
+        state.where = ''; syncUrl(); renderSummary(); render();
+        PNC.toast(`Localização: ${state.locality}`);
+      }, () => PNC.toast('Não foi possível obter a localização.', 'err'), { timeout: 10000 });
+    }
+    // Localidade: freguesia/localidade do OpenStreetMap; se falhar, a zona do lugar mais próximo
+    async function localityOf(pos) {
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&accept-language=pt&lat=${pos.lat}&lon=${pos.lng}`);
+        const a = (await r.json()).address || {};
+        const name = a.suburb || a.village || a.town || a.city_district || a.city;
+        if (name) return name.replace(/^(União das Freguesias de |Freguesia de )/, '');
+      } catch (e) {}
+      const near = [...listings].sort((x, y) => dist(x) - dist(y))[0];
+      return near ? near.zone : 'Porto';
+    }
+    const dist = l => l.approx_lat == null ? Infinity : PNC.distance(state.near, { lat: l.approx_lat, lng: l.approx_lng });
+    const sameZone = (a, b) => (a || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') === (b || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
     // ---------- Painel de pesquisa ----------
     $('veh').innerHTML = PNC.VEHICLES.map(([id, label]) => `<button class="chip" type="button" data-v="${id}">${label}</button>`).join('');
     function openPanel() {
@@ -138,13 +170,8 @@
     $('open-search').onclick = openPanel;
     $('close-search').onclick = () => $('panel').classList.add('hidden');
     $('veh').onclick = e => { const c = e.target.closest('.chip'); if (!c) return; document.querySelectorAll('#veh .chip').forEach(x => x.classList.toggle('on', x === c)); };
-    $('clear').onclick = () => { $('where').value = ''; $('start').value = ''; $('end').value = ''; state.near = null; document.querySelectorAll('#veh .chip').forEach(x => x.classList.toggle('on', x.dataset.v === 'carro')); };
-    $('locate').onclick = () => {
-      if (!navigator.geolocation) return PNC.toast('Localização indisponível neste dispositivo.', 'err');
-      navigator.geolocation.getCurrentPosition(
-        p => { state.near = { lat: p.coords.latitude, lng: p.coords.longitude }; $('where').value = ''; $('where').placeholder = 'Perto de mim'; PNC.toast('Localização obtida.'); },
-        () => PNC.toast('Não foi possível obter a localização.', 'err'));
-    };
+    $('clear').onclick = () => { $('where').value = ''; $('start').value = ''; $('end').value = ''; document.querySelectorAll('#veh .chip').forEach(x => x.classList.toggle('on', x.dataset.v === 'carro')); };
+    $('locate').onclick = () => { $('panel').classList.add('hidden'); useGps(); };
     $('do-search').onclick = () => {
       state.where = $('where').value.trim();
       state.start = $('start').value; state.end = $('end').value;
@@ -157,59 +184,112 @@
 
     // ---------- Lugares ----------
     let listings = [];
+    const priceShort = l => l.price_hour ? PNC.euro(l.price_hour, '/h') : l.price_day ? PNC.euro(l.price_day, '/dia') : PNC.euro(l.price_month, '/mês');
     function card(l) {
       const photo = PNC.photoUrl(l.cover_photo);
-      const dist = state.near && l.approx_lat ? ' · ' + PNC.walkText(PNC.distance(state.near, { lat: l.approx_lat, lng: l.approx_lng })) : '';
-      const extra = l.has_charger ? `Carregador ${l.charger_kw ? l.charger_kw + ' kW' : ''}` : (l.is_covered ? 'Coberto' : 'Descoberto');
-      return `<div class="card">
+      const av = PNC.availability(l);
+      const d = dist(l);
+      const extra = l.has_charger ? `Carregador ${l.charger_kw ? String(l.charger_kw).replace('.', ',') + ' kW' : ''}` : (l.is_covered ? 'Coberto' : 'Descoberto');
+      return `<div class="card ${av.key !== 'disponivel' ? 'is-busy' : ''}">
         <div class="card-photo" style="${photo ? `background-image:url('${photo}')` : ''}">
           ${photo ? '' : PNC.icon('garage')}
           ${l.has_charger ? `<span class="card-badge">${PNC.icon('bolt')} Carregador</span>` : ''}
+          ${l.is_demo ? '<span class="card-demo">Exemplo</span>' : ''}
           <button class="card-fav" type="button" aria-label="Guardar nos favoritos" data-fav="${l.id}">${PNC.icon('heart')}</button>
         </div>
         <div class="card-body">
-          <div class="card-row"><span class="card-title">${PNC.esc(l.title)}</span><span class="card-rating">${PNC.icon('star')} Novo</span></div>
-          <div class="card-sub">${PNC.esc(l.zone)}${dist}</div>
-          <div class="card-sub">${PNC.esc(extra)}</div>
+          <div class="card-row"><span class="card-title">${esc(l.title)}</span><span class="card-rating">${PNC.icon('star')} Novo</span></div>
+          <div class="card-sub">${esc(l.zone)}${isFinite(d) ? ' · ' + PNC.walkText(d) : ''}</div>
+          <div class="card-sub">${esc(extra)}</div>
+          <div class="avail av-${av.key}">${esc(av.label)}</div>
           <div class="card-price"><b>${PNC.mainPrice(l)}</b></div>
         </div>
       </div>`;
     }
-    function applyFilters() {
+    // filtros de veículo e categoria (aplicam-se a tudo)
+    function filtered() {
       const cat = PNC.CATEGORIES.find(c => c.id === state.cat);
       let out = listings.filter(l => (l.vehicle_types || ['carro']).includes(state.veh));
       if (cat && cat.match) out = out.filter(cat.match);
-      if (state.where) {
-        const w = state.where.toLowerCase();
-        out = out.filter(l => (l.zone || '').toLowerCase().includes(w) || (l.title || '').toLowerCase().includes(w));
-      }
-      if (state.near) out.sort((a, b) => PNC.distance(state.near, { lat: a.approx_lat, lng: a.approx_lng }) - PNC.distance(state.near, { lat: b.approx_lat, lng: b.approx_lng }));
       return out;
     }
+
+    // ---------- Mapa "Perto de si" ----------
+    let map, layer;
+    const MAX_PINS = 8, MAX_KM = 5;
+    function drawMap(list) {
+      const el = $('map');
+      if (!el) return;
+      if (!window.L) { el.innerHTML = '<div class="map-empty">Mapa indisponível sem ligação.</div>'; return; }
+      if (!map || !document.body.contains(map.getContainer())) {
+        map = L.map(el, { scrollWheelZoom: false, zoomControl: true });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+        layer = L.layerGroup().addTo(map);
+      }
+      layer.clearLayers();
+      L.marker([state.near.lat, state.near.lng], { icon: L.divIcon({ className: '', html: '<div class="pin-me"></div>', iconSize: [0, 0] }), zIndexOffset: 1000 })
+        .bindPopup(`<b>${state.gps ? 'Está aqui' : 'Localização simulada'}</b>${esc(state.locality)}`).addTo(layer);
+      const avail = list.filter(l => PNC.availability(l).key === 'disponivel' && dist(l) <= MAX_KM * 1000)
+        .sort((a, b) => dist(a) - dist(b)).slice(0, MAX_PINS);
+      // pinos na mesma posição aproximada: afastar ligeiramente para não se sobreporem
+      const seen = {};
+      avail.forEach(l => {
+        const k = l.approx_lat + ',' + l.approx_lng, n = seen[k] = (seen[k] || 0) + 1;
+        const lat = l.approx_lat + (n - 1) * 0.0007, lng = l.approx_lng + (n - 1) * 0.0009;
+        L.marker([lat, lng], { icon: L.divIcon({ className: '', html: `<span class="pin-price ${l.has_charger ? 'charge' : ''}">${l.has_charger ? '⚡ ' : ''}${priceShort(l)}</span>`, iconSize: [0, 0] }) })
+          .bindPopup(`<b>${esc(l.title)}</b>${esc(l.zone)} · ${PNC.walkText(dist(l))}<br>${PNC.mainPrice(l)}${l.is_demo ? ' · <i>Exemplo</i>' : ''}<br><small>Localização aproximada</small>`)
+          .addTo(layer);
+      });
+      const pts = [[state.near.lat, state.near.lng], ...avail.map(l => [l.approx_lat, l.approx_lng])];
+      if (pts.length > 1) map.fitBounds(pts, { padding: [40, 40], maxZoom: 16 }); else map.setView(pts[0], 14);
+      setTimeout(() => map.invalidateSize(), 50);
+      return avail.length;
+    }
+
     function render() {
-      const list = applyFilters();
       const content = $('content');
-      if (!listings.length) {
-        content.innerHTML = `<section class="section"><h2>Perto de si</h2><div class="empty-card"><strong>Os primeiros lugares estão a chegar</strong>Estamos a reunir anfitriões no Porto. Tem um lugar livre? Seja dos primeiros a publicar.</div></section>`;
+      const list = filtered();
+      // Pesquisa por texto → grelha de resultados
+      if (state.where) {
+        const w = state.where.toLowerCase();
+        const res = list.filter(l => (l.zone || '').toLowerCase().includes(w) || (l.title || '').toLowerCase().includes(w)).sort((a, b) => dist(a) - dist(b));
+        content.innerHTML = res.length
+          ? `<section class="section"><div class="section-head"><h2>${res.length} ${res.length === 1 ? 'lugar' : 'lugares'} em ${esc(state.where)}</h2><a href="/">Limpar pesquisa</a></div><div class="grid-cards">${res.map(card).join('')}</div></section>`
+          : `<section class="section"><h2>Sem resultados</h2><div class="empty-card"><strong>Nenhum lugar corresponde à pesquisa</strong>Experimente outra zona, categoria ou veículo.</div></section>`;
         return;
       }
-      if (!list.length) {
-        content.innerHTML = `<section class="section"><h2>Sem resultados</h2><div class="empty-card"><strong>Nenhum lugar corresponde à pesquisa</strong>Experimente outra zona, categoria ou veículo.</div></section>`;
-        return;
-      }
-      // Pesquisa/categoria ativa → grelha; caso contrário → carrosséis por zona (como no Airbnb)
-      if (state.where || state.cat !== 'todos' || state.near) {
-        content.innerHTML = `<section class="section"><div class="section-head"><h2>${list.length} ${list.length === 1 ? 'lugar' : 'lugares'}${state.where ? ' em ' + PNC.esc(state.where) : ''}</h2></div><div class="grid-cards">${list.map(card).join('')}</div></section>`;
-        return;
-      }
-      const byZone = {};
-      list.forEach(l => (byZone[l.zone] = byZone[l.zone] || []).push(l));
-      const zones = Object.keys(byZone).sort((a, b) => byZone[b].length - byZone[a].length);
-      content.innerHTML = zones.map(z => `
-        <section class="section">
-          <div class="section-head"><h2>Lugares em ${PNC.esc(z)}</h2><a href="/?onde=${encodeURIComponent(z)}">Ver todos ›</a></div>
-          <div class="rail">${byZone[z].slice(0, 10).map(card).join('')}</div>
-        </section>`).join('');
+      // Vista normal: mapa + localidade + outras zonas
+      const local = list.filter(l => sameZone(l.zone, state.locality)).sort((a, b) => {
+        const o = { disponivel: 0, fechada: 1, ocupada: 2 };
+        return o[PNC.availability(a).key] - o[PNC.availability(b).key] || dist(a) - dist(b);
+      });
+      const others = {};
+      list.filter(l => !sameZone(l.zone, state.locality)).sort((a, b) => dist(a) - dist(b)).forEach(l => (others[l.zone] = others[l.zone] || []).push(l));
+      const nAvailLocal = local.filter(l => PNC.availability(l).key === 'disponivel').length;
+      content.innerHTML = `
+        <section class="section" id="sec-map">
+          <h2>Perto de si</h2>
+          <div class="map-bar">
+            <span class="muted" id="map-note"></span>
+            <button class="text-btn" id="gps" type="button">${state.gps ? 'Atualizar localização' : 'Usar a minha localização'}</button>
+          </div>
+          <div class="map-big" id="map" aria-label="Mapa com os lugares disponíveis mais próximos"></div>
+        </section>
+        <section class="section" id="sec-local">
+          <div class="section-head"><h2>Garagens em ${esc(state.locality)}</h2><span class="muted">${local.length ? `${nAvailLocal} de ${local.length} disponíveis agora` : ''}</span></div>
+          ${local.length ? `<div class="grid-cards">${local.map(card).join('')}</div>`
+            : `<div class="empty-card"><strong>Ainda não há lugares em ${esc(state.locality)}</strong>Veja as zonas perto ou seja o primeiro a publicar um lugar aqui.</div>`}
+        </section>
+        ${Object.keys(others).map(z => `
+          <section class="section">
+            <div class="section-head"><h2>Lugares em ${esc(z)}</h2><a href="/?onde=${encodeURIComponent(z)}">Ver todos ›</a></div>
+            <div class="rail">${others[z].slice(0, 10).map(card).join('')}</div>
+          </section>`).join('')}`;
+      $('gps').onclick = useGps;
+      const n = drawMap(list);
+      $('map-note').textContent = n == null ? '' : n
+        ? `${n} ${n === 1 ? 'lugar disponível' : 'lugares disponíveis'} agora perto de ${state.locality}${state.gps ? '' : ' (localização simulada)'}`
+        : `Sem lugares disponíveis agora num raio de ${MAX_KM} km.`;
     }
     document.addEventListener('click', e => {
       const f = e.target.closest('[data-fav]'); if (!f) return;
@@ -222,8 +302,8 @@
       const db = PNC.db();
       if (!db) { listings = []; render(); return; }
       const { data, error } = await db.from('listings')
-        .select('id,title,zone,approx_lat,approx_lng,cover_photo,vehicle_types,is_covered,is_underground,is_closed,is_solo,easy_entry,has_charger,charger_kw,price_hour,price_day,price_month')
-        .eq('status', 'ativo').order('approved_at', { ascending: false }).limit(200);
+        .select('id,title,zone,approx_lat,approx_lng,cover_photo,vehicle_types,is_covered,is_underground,is_closed,is_solo,easy_entry,has_charger,charger_kw,price_hour,price_day,price_month,is_demo,demo_occupied,listing_schedule(weekday,opens_at,closes_at)')
+        .eq('status', 'ativo').order('approved_at', { ascending: false }).limit(300);
       listings = error ? [] : data;
       render();
     })();

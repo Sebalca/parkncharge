@@ -47,9 +47,11 @@ privacidade.html    privacidade / RGPD (em preparação, v0.8)
 assets/app.js       código comum (objeto global PNC)
 assets/style.css    design system
 assets/icon.svg     favicon
+assets/demo/*.svg   ilustrações das garagens de exemplo
 design/             ecrãs de referência do Figma
 docs/modelo-dados.md          tabelas, regras e estado da base de dados
 supabase/migrations/          SQL aplicado no Supabase, por ordem
+supabase/seed/exemplos_sao_mamede.sql   cria (ou recria) as 12 garagens de exemplo
 tests/regressao.cjs           testes automáticos (Playwright)
 CLAUDE.md                     processo obrigatório para cada alteração
 PATCH NOTES.md                decisões fixas + histórico de versões
@@ -63,9 +65,11 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
 | Função / constante | Para quê |
 |---|---|
 | `APP_VERSAO` | Versão atual (rodapé e Perfil). Atualizar em cada alteração, junto com o `?v=` dos ficheiros em `assets/` nas páginas. |
-| `renderChrome({active, host, header, footer})` | Desenha o cabeçalho (computador), a barra inferior (telemóvel) e o rodapé. `host: true` usa a barra do anfitrião. |
+| `renderChrome({active, host, header, footer})` | Desenha o cabeçalho com o **menu da conta** (janela do canto superior direito), a barra inferior (telemóvel) e o rodapé. `host: true` usa a barra e o menu do anfitrião. |
+| `DEFAULT_LOC` | Localização por defeito (fictícia): São Mamede de Infesta. |
+| `openNow()`, `nextOpening()`, `availability(l)` | Estado de um lugar agora: `disponivel`, `ocupada` (simulada, `demo_occupied`) ou `fechada` (fora do horário, com a próxima abertura). |
 | `db()` | Cliente Supabase já apontado para o schema `parkncharge` (`plataforma.schema('parkncharge')`). |
-| `photoUrl(path)`, `BUCKET` | URL pública de uma fotografia no bucket `parkncharge`. |
+| `photoUrl(path)`, `BUCKET` | URL pública de uma fotografia no bucket `parkncharge` (ou do próprio site, para caminhos `assets/…` dos exemplos). |
 | `currentUser()`, `requireLogin()`, `isAdmin()`, `displayName(user)` | Sessão. `requireLogin` envia para `login.html?next=…` e volta depois de entrar. O nome e o avatar vêm de `public.profiles`. |
 | `CATEGORIES`, `VEHICLES`, `SPOT_TYPES`, `ZONES`, `CHARGERS`, `WEEKDAYS`, `STATUS` | Catálogos usados em todo o site (categorias com a função `match` do filtro, tipos de veículo, zonas do Porto…). |
 | `icon(nome)`, `LOGO` | Ícones SVG inline e logótipo. |
@@ -78,7 +82,8 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
 - Letras: Josefin Sans (títulos) e Lato (texto), do Google Fonts.
 - Padrão dos ecrãs: zona azul no topo e uma "folha" clara com cantos arredondados por cima, como no Figma.
 - Componentes: `.searchbar`, `.cats/.cat`, `.card`, `.rail`, `.grid-cards`, `.btn` (`.orange`, `.ghost`, `.danger`, `.small`), `.chip`, `.input`, `.switch`, `.option`, `.host-item`, `.status`, `.nav`, `.site-footer`, `.toast`.
-- Primeiro para telemóvel. A partir de 900 px aparece o cabeçalho e o rodapé, a barra inferior esconde-se, a pesquisa mostra os três campos e as grelhas passam a 4–5 colunas.
+- Primeiro para telemóvel: cabeçalho compacto (logótipo + botão da conta) e barra inferior.
+- A partir de 700 px aparece o cabeçalho completo e o rodapé, a barra inferior esconde-se, a pesquisa mostra os três campos e as grelhas passam a 3 colunas (4 a partir de 1000 px, 5 a partir de 1300 px).
 
 ---
 
@@ -91,12 +96,36 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
   - veículo: Mota, Carro, Carrinha, Autocarro, Camião ou Autocaravana.
 - A pesquisa fica no endereço (`?onde=Boavista&inicio=…&fim=…&veiculo=carrinha&cat=carregador`), por isso pode ser partilhada.
 - **Categorias** em barra horizontal: Todos, Com carregador, Coberto, Subterrâneo, Fechado, Acesso fácil, Lugar só seu, Mensal, Motas, Carrinhas.
-- **Lugares:** lê até 200 anúncios **ativos** do Supabase e filtra no browser (veículo, categoria, texto na zona ou título).
-  - Sem pesquisa, aparecem em **carrosséis por zona**; com pesquisa ou categoria, numa **grelha**.
-  - Com "perto de mim", ficam ordenados pela distância à posição aproximada e mostram os minutos a pé.
-  - Cada cartão mostra a foto de capa, o selo "Carregador", ❤ (favoritos, só visual até à v0.6), título, zona, coberto/carregador e o preço principal (hora → dia → mês).
-- **Por fazer:** as datas ainda não filtram (v0.3 filtra pelo horário e v0.4 pelas reservas). Mapa e página do lugar chegam na v0.3/v0.4.
+- **Lugares:** lê até 300 anúncios **ativos** do Supabase, com o horário (`listing_schedule`), e filtra no browser. A categoria e o veículo filtram todas as secções.
+- **Localização:** por agora arranca sempre em **São Mamede de Infesta** (fictícia).
+  - "Usar a minha localização" passa ao GPS e descobre a localidade (Nominatim, reverse).
+  - Se isso falhar, usa a zona do lugar mais próximo.
+- **Sem pesquisa por texto**, a página tem três partes:
+  1. **Perto de si:** mapa (Leaflet + OpenStreetMap) com a localização (ponto azul) e as garagens **disponíveis agora** mais próximas (até 8, num raio de 5 km).
+     - Cada pino mostra o preço; é laranja com ⚡ se tiver carregador.
+     - O popup mostra título, zona, minutos a pé e preço.
+     - Os pinos usam a posição aproximada (~300 m). Os que calham no mesmo ponto são afastados um pouco.
+  2. **Garagens em <localidade>:** todas as da localidade, **mesmo ocupadas**. Aparecem por esta ordem: disponíveis, fechadas, ocupadas; dentro de cada grupo, pela distância.
+  3. **Lugares em <outra zona>:** carrosséis das outras zonas, das mais próximas para as mais longe.
+- **Com pesquisa por texto** (zona ou título): grelha de resultados.
+- **Estado de cada lugar** (`PNC.availability`):
+  - **Disponível agora:** aberto pelo horário semanal e livre;
+  - **Ocupada:** ocupação simulada (`demo_occupied`) até às reservas da v0.4;
+  - **Fechada agora · abre … às …:** fora do horário.
+- **Cartão:** foto de capa, selos "Carregador" e **"Exemplo"**, ❤ (favoritos, só visual até à v0.6), título, zona e minutos a pé, coberto/carregador, estado e preço principal (hora → dia → mês). Os que não estão disponíveis ficam com a foto mais apagada.
+- **Por fazer:** as datas da pesquisa ainda não filtram. Mapa nos resultados, ordenação e página do lugar chegam na v0.3/v0.4.
 - Destaque "Tem um lugar livre?" e lista de zonas do Porto (links de pesquisa, também para SEO).
+
+### Menu da conta (janela do canto superior direito)
+- O botão ☰ + avatar abre uma **janela**, não uma página, em todas as páginas (também no telemóvel).
+- **Sem sessão:** Entrar, Criar conta, Arrendar o meu lugar, Centro de ajuda.
+- **Com sessão:**
+  - nome e email;
+  - Mudar para anfitrião/condutor;
+  - atalhos: Reservas/Favoritos/Mensagens ou Os meus lugares/Publicar/Dados de anfitrião;
+  - Aprovação de anúncios (admin), Perfil, Centro de ajuda, Terminar sessão.
+- A versão aparece no canto da janela.
+- Fecha ao clicar fora ou com Esc, mas não quando se carrega dentro e se larga fora. O avatar (ou a inicial) aparece no botão quando há sessão.
 
 ### Conta (`login.html`, `perfil.html`)
 - Separadores **Entrar / Criar conta**, com email + palavra-passe e **Continuar com Google**.
@@ -232,12 +261,20 @@ Servir a pasta (`python3 -m http.server` ou `npx serve .`) e abrir `http://local
 - Pendente (plataforma): ativar "Leaked password protection" em Authentication → Attack Protection.
 
 ### Serviços externos
-- jsDelivr: `@supabase/supabase-js@2`, `sebalca/plataforma-core@main/auth.js`, `leaflet@1.9.4`.
+- jsDelivr: `@supabase/supabase-js@2`, `sebalca/plataforma-core@main/auth.js`, `leaflet@1.9.4` (Explorar e assistente).
 - Google Fonts: Josefin Sans e Lato.
-- OpenStreetMap: tiles do mapa e Nominatim (pesquisa de moradas). O uso é leve: uma pesquisa por clique, só no assistente. Se o tráfego crescer, passar para um fornecedor com chave.
+- OpenStreetMap: tiles do mapa (Explorar e assistente) e Nominatim (pesquisa de moradas no assistente; localidade ao usar o GPS). O uso é leve: uma pesquisa por clique. Se o tráfego crescer, passar para um fornecedor com chave.
 
-### Limitações conhecidas (v0.2a)
+### Garagens de exemplo
+- **12 garagens fictícias:** 7 em São Mamede de Infesta e 5 em Senhora da Hora, Custóias, Paranhos, Leça do Balio e Matosinhos. 2 estão ocupadas e 1 só abre em dias úteis.
+- Estão na conta do administrador, com `is_demo = true`, o selo "Exemplo", ilustrações em `assets/demo/` e moradas sem número de porta.
+- **Recriar:** correr `supabase/seed/exemplos_sao_mamede.sql` no editor SQL do Supabase.
+- **Apagar todas** (antes da beta, v0.8): `delete from parkncharge.listings where is_demo;`
+
+### Limitações conhecidas (v0.2b)
 - Favoritos, Reservas e Mensagens são páginas "em breve".
 - As datas da pesquisa ainda não filtram.
-- A ordenação "perto de mim" usa a posição aproximada (~300 m).
+- A ocupação é simulada nos exemplos; os lugares reais só ficam "ocupados" com as reservas (v0.4).
+- A localização arranca fixa em São Mamede de Infesta até se usar o GPS.
+- A distância usa a posição aproximada (~300 m) e é calculada no browser (PostGIS mais tarde).
 - Termos e privacidade ainda por escrever (antes da beta, v0.8).
