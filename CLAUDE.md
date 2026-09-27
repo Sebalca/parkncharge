@@ -16,7 +16,7 @@ Responder sempre em português de Portugal, de forma concisa.
    - alteração pedida entre versões → letra seguinte (`v0.2a` → `v0.2b`);
    - nova versão do roadmap → `v0.3`, `v0.4`… (e marcar no `ROADMAP.md`).
    Se o pedido criar uma regra nova ("quero sempre…", "nunca…"), acrescentá-la às Decisões fixas e, se possível, um teste.
-6. Atualizar `APP_VERSAO` em `assets/app.js`, e o `README.md` / `docs/modelo-dados.md` se mudou o funcionamento ou os dados.
+6. Atualizar `APP_VERSAO` em `assets/app.js` **e** o `?v=` de `assets/app.js` e `assets/style.css` em todas as páginas (o browser guarda-os em cache 4 h; sem isto os visitantes ficam com a versão antiga), e o `README.md` / `docs/modelo-dados.md` se mudou o funcionamento ou os dados.
 7. Commit + push para `main` (`git fetch && git rebase origin/main` antes); verificar o site publicado.
 
 ## Regras

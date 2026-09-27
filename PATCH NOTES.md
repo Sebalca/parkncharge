@@ -34,6 +34,7 @@ Regras que o Sebastião pediu explicitamente. Antes de qualquer alteração ou n
 - D23 O carregador é uma **categoria/filtro** ("Com carregador"), sem separador próprio. Categorias: Todos, Com carregador, Coberto, Subterrâneo, Fechado, Acesso fácil, Lugar só seu, Mensal, Motas, Carrinhas.
 - D24 Sem pesquisa: lugares em carrosséis por zona ("Lugares em …"). Com pesquisa ou categoria: grelha.
 - D25 A versão do site aparece no rodapé.
+- D26 `assets/app.js` e `assets/style.css` são carregados com `?v=<versão>` em todas as páginas, para os visitantes receberem logo a versão nova.
 
 **Anfitrião**
 - D30 Modo anfitrião separado, com "Mudar para anfitrião" / "Mudar para condutor" no perfil. Barra inferior: **Hoje, Calendário, Lugares, Mensagens, Menu**.
@@ -57,6 +58,7 @@ Regras que o Sebastião pediu explicitamente. Antes de qualquer alteração ou n
 - Novo `CLAUDE.md` com o processo obrigatório para cada alteração.
 - Testes de regressão (`tests/regressao.cjs`, Playwright) para as decisões fixas.
 - Versão visível no rodapé e no fundo do Perfil (`APP_VERSAO`).
+- `app.js` e `style.css` com `?v=0.2a` em todas as páginas: o Cloudflare manda o browser guardá-los 4 h e, sem isto, quem já tinha visitado o site via a versão antiga depois de cada publicação.
 - A reestruturação de 26/09 passa a chamar-se `v0.1a` (antes `v0.1.1`), para seguir a numeração com letras.
 
 ### v0.2 — 26/09/2026

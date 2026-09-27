@@ -54,6 +54,9 @@ const CSS = ler('assets/style.css');
   await ev(() => { window.__l = [{ id: '1', title: 'A', zone: 'Boavista', vehicle_types: ['carro'], has_charger: true, price_hour: 1 }, { id: '2', title: 'B', zone: 'Baixa', vehicle_types: ['carro'], price_day: 5 }]; });
   t('D24', 'sem pesquisa: carrosséis por zona', await ev(() => { listings = window.__l; state.cat = 'todos'; render(); return document.querySelectorAll('.rail').length === 2 && /Lugares em Boavista/.test(document.querySelector('#content').innerText); }));
   t('D24', 'com categoria: grelha filtrada', await ev(() => { state.cat = 'carregador'; render(); return document.querySelectorAll('.grid-cards .card').length === 1; }));
+  const V = ler('assets/app.js').match(/APP_VERSAO = 'v([^']+)'/)[1];
+  t('D26', 'app.js e style.css carregados com ?v= da versão atual (evita cache antiga)', PAGINAS.every(f => (ler(f).match(/assets\/(app\.js|style\.css)(\?v=[^"]*)?"/g) || []).every(x => x.includes('?v=' + V + '"'))),
+    PAGINAS.filter(f => (ler(f).match(/assets\/(app\.js|style\.css)(\?v=[^"]*)?"/g) || []).some(x => !x.includes('?v=' + V + '"'))));
   t('D25', 'versão visível no rodapé', await ev(() => document.querySelector('#app-versao')?.textContent === PNC.APP_VERSAO && /^v\d+\.\d+[a-z]?$/.test(PNC.APP_VERSAO)));
 
   console.log('Anfitrião');

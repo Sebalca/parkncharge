@@ -62,7 +62,7 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
 
 | Função / constante | Para quê |
 |---|---|
-| `APP_VERSAO` | Versão atual (rodapé e Perfil). Atualizar em cada alteração. |
+| `APP_VERSAO` | Versão atual (rodapé e Perfil). Atualizar em cada alteração, junto com o `?v=` dos ficheiros em `assets/` nas páginas. |
 | `renderChrome({active, host, header, footer})` | Desenha o cabeçalho (computador), a barra inferior (telemóvel) e o rodapé. `host: true` usa a barra do anfitrião. |
 | `db()` | Cliente Supabase já apontado para o schema `parkncharge` (`plataforma.schema('parkncharge')`). |
 | `photoUrl(path)`, `BUCKET` | URL pública de uma fotografia no bucket `parkncharge`. |
@@ -223,6 +223,7 @@ Servir a pasta (`python3 -m http.server` ou `npx serve .`) e abrir `http://local
 - **Cloudflare Pages** (projeto `parkncharge`, ligado ao GitHub): cada push para `main` publica em ~1 minuto.
 - Configuração: sem framework, sem comando de build, pasta de saída `/`.
 - Domínio personalizado `parkncharge.frisk.pt` (CNAME para `parkncharge.pages.dev`).
+- O browser guarda `assets/*` em cache durante 4 h (`max-age=14400`). Por isso cada página carrega `assets/app.js?v=<versão>` e `assets/style.css?v=<versão>`: ao mudar a versão, todos recebem os ficheiros novos.
 
 ### Supabase (configuração feita)
 - Schema `parkncharge` criado com `supabase/migrations/20260926_v02_listings.sql` e **exposto** em Integrations → Data API → Exposed schemas.
