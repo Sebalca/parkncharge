@@ -45,6 +45,7 @@ const CSS = ler('assets/style.css');
   console.log('Explorar');
   await p.goto(U + '/'); await p.waitForTimeout(400);
   t('D20', 'Explorar abre sem conta (não redireciona para o login)', new URL(p.url()).pathname === '/');
+  t('D21', 'cabeçalho sem "Arrendar o meu lugar" (está no menu da conta)', await ev(() => !/Arrendar o meu lugar/.test(document.querySelector('.site-header').innerText)) && /Arrendar o meu lugar/.test(ler('assets/app.js').split('function buildAccountMenu')[1]));
   t('D21', 'barra inferior: Explorar, Favoritos, Reservas, Mensagens, Perfil',
     JSON.stringify(await ev(() => [...document.querySelectorAll('.nav a span')].map(s => s.textContent))) === JSON.stringify(['Explorar', 'Favoritos', 'Reservas', 'Mensagens', 'Perfil']));
   t('D22', 'pesquisa Onde · Quando (início e fim) · Veículo', await ev(() => !!(document.querySelector('#where') && document.querySelector('#start') && document.querySelector('#end')) && document.querySelectorAll('#veh .chip').length === 6
@@ -61,7 +62,7 @@ const CSS = ler('assets/style.css');
       { id: '3', title: 'C', zone: 'Boavista', approx_lat: 41.16, approx_lng: -8.64, vehicle_types: ['carro'], price_day: 5, listing_schedule: h24 },
       { id: '4', title: 'D', zone: 'Baixa', approx_lat: 41.146, approx_lng: -8.61, vehicle_types: ['carro'], price_day: 5, listing_schedule: [] },
     ];
-    listings = window.__l; state.cat = 'todos'; state.where = ''; render();
+    listings = window.__l; state.cats = []; state.where = ''; render();
   });
   t('D24', 'Explorar: mapa "Perto de si" + garagens da localidade (mesmo ocupadas) + carrosséis das outras zonas', await ev(() => {
     const c = document.querySelector('#content'), txt = c.innerText;
@@ -70,7 +71,19 @@ const CSS = ler('assets/style.css');
       && c.querySelector('#sec-map').compareDocumentPosition(c.querySelector('#sec-local')) & Node.DOCUMENT_POSITION_FOLLOWING;
   }));
   t('D24', 'com pesquisa por texto: grelha de resultados', await ev(() => { state.where = 'Boavista'; render(); const ok = document.querySelectorAll('.grid-cards .card').length === 1; state.where = ''; render(); return ok; }));
-  t('D24', 'categoria filtra todas as secções', await ev(() => { state.cat = 'carregador'; render(); const n = document.querySelectorAll('#content .card').length; state.cat = 'todos'; render(); return n === 1; }));
+  t('D24', 'categoria filtra todas as secções', await ev(() => { state.cats = ['carregador']; render(); const n = document.querySelectorAll('#content .card').length; state.cats = []; render(); return n === 1; }));
+  t('D23', 'várias categorias ao mesmo tempo: o lugar tem de cumprir todas', await ev(() => {
+    const l = [{ has_charger: true, is_covered: true }, { has_charger: true }, { is_covered: true }];
+    return PNC.matchAll(l, PNC.CATEGORIES, ['carregador', 'coberto']).length === 1 && PNC.matchAll(l, PNC.CATEGORIES, ['carregador']).length === 2 && PNC.matchAll(l, PNC.CATEGORIES, []).length === 3;
+  }));
+  t('D23', 'clicar em duas categorias deixa as duas ligadas e "Todos" limpa', await ev(() => {
+    document.querySelector('.cat[data-cat="carregador"]').click(); document.querySelector('.cat[data-cat="coberto"]').click();
+    const two = document.querySelectorAll('.cat.on').length === 2 && state.cats.length === 2;
+    document.querySelector('.cat[data-cat="todos"]').click();
+    return two && !state.cats.length && document.querySelector('.cat[data-cat="todos"]').classList.contains('on');
+  }));
+  t('D61', 'cartões abrem a página do anúncio (lugar.html?id=…)', await ev(() => [...document.querySelectorAll('#content a.card')].every(a => /\/lugar\.html\?id=/.test(a.getAttribute('href'))) && document.querySelectorAll('#content a.card').length > 0));
+  t('D62', 'avaliações: média e número no cartão', await ev(() => { listings[0].reviews = [{ rating: 5 }, { rating: 4 }]; render(); return /4,5\s*\(2\)/.test(document.querySelector('#sec-local').innerText); }));
   t('D29', 'estado: Disponível (aberto e livre) / Ocupada (simulada) / Fechada (horário)', await ev(() => {
     const [a, b, , d] = window.__l;
     return PNC.availability(a).key === 'disponivel' && PNC.availability(b).key === 'ocupada' && PNC.availability(d).key === 'fechada'
@@ -78,6 +91,32 @@ const CSS = ler('assets/style.css');
   }));
   t('D50', 'garagens de exemplo com selo "Exemplo"', await ev(() => [...document.querySelectorAll('#sec-local .card')].filter(c => /Exemplo/.test(c.innerText)).length === 1));
   t('D50', 'só o admin cria exemplos ou ocupação simulada (regra no servidor)', /new\.is_demo := false; new\.demo_occupied := false;/.test(SQL) && /new\.is_demo := old\.is_demo;/.test(SQL));
+
+  console.log('Aluguer de carros');
+  t('D60', 'separadores Estacionar | Alugar carro por cima da pesquisa', await ev(() => {
+    const tabs = document.querySelector('#mode-tabs'), sb = document.querySelector('#open-search');
+    return [...tabs.querySelectorAll('button')].map(b => b.textContent.trim()).join('|') === 'Estacionar|Alugar carro' && (tabs.compareDocumentPosition(sb) & Node.DOCUMENT_POSITION_FOLLOWING) > 0;
+  }));
+  await ev(() => { state.mode = 'carros'; state.cats = []; renderMode(); listings = [
+    { id: 'c1', title: 'Tesla', zone: 'São Mamede de Infesta', approx_lat: 41.19, approx_lng: -8.61, fuel: 'eletrico', transmission: 'automatica', seats: 5, price_hour: 14, car_schedule: [], reviews: [] },
+    { id: 'c2', title: 'Clio', zone: 'São Mamede de Infesta', approx_lat: 41.19, approx_lng: -8.61, fuel: 'gasolina', transmission: 'manual', seats: 5, price_day: 30, car_schedule: [], reviews: [] },
+    { id: 'c3', title: '5008', zone: 'Custóias', approx_lat: 41.2, approx_lng: -8.64, fuel: 'gasoleo', transmission: 'automatica', seats: 7, price_day: 58, car_schedule: [], reviews: [] }]; render(); });
+  t('D60', 'modo carros: mesma página (mapa + "Carros em <localidade>" + outras zonas), categorias de carros, cartões para carro.html', await ev(() =>
+    /Carros em São Mamede de Infesta/.test(document.querySelector('#content').innerText) && !!document.querySelector('#sec-map') && document.querySelectorAll('.rail').length === 1
+    && [...document.querySelectorAll('.cat span')].map(s => s.textContent).includes('Elétrico') && [...document.querySelectorAll('#content a.card')].every(a => /\/carro\.html\?id=/.test(a.getAttribute('href')))
+    && document.querySelector('#f-veh-label').textContent === 'Lugares'));
+  t('D60', 'filtros de carros combinam-se (Automático + Elétrico)', await ev(() => { state.cats = ['automatico', 'eletrico']; render(); const n = document.querySelectorAll('#content a.card').length; state.cats = []; return n === 1; }));
+  await ev(() => { state.mode = 'lugares'; renderMode(); listings = window.__l; render(); });
+  t('D63', 'preço estimado escolhe a combinação mais barata', await ev(() => {
+    const l = { price_hour: 2, price_day: 10, price_month: 150 }, s = new Date(2026, 0, 1, 10);
+    const h = n => new Date(s.getTime() + n * 36e5);
+    return PNC.estimate(l, s, h(3)).total === 6 && PNC.estimate(l, s, h(8)).total === 10 && PNC.estimate(l, s, h(26)).total === 14 && PNC.estimate(l, s, h(24 * 40)).total === 300 && PNC.estimate(l, s, s) === null;
+  }));
+  t('D62', 'páginas do lugar e do carro carregam item.js (galeria, avaliações, reserva com preço)', ['lugar.html', 'carro.html'].every(f => /assets\/item\.js\?v=/.test(ler(f))) && /data-tipo="carro"/.test(ler('carro.html'))
+    && ['reviewsBlock', 'bookingBox', 'Reservas em breve', 'Total estimado', 'morada exata', 'Exemplo'].every(x => ler('assets/item.js').includes(x)));
+  t('D62', 'avaliações: 1 por pessoa, nunca nos próprios anúncios, só o admin cria exemplos (servidor)',
+    /reviews_one_per_listing/.test(SQL) && /reviews_one_per_car/.test(SQL) && /Não pode avaliar os seus próprios anúncios/.test(SQL) && /if not admin then new\.author_id := auth\.uid\(\); new\.is_demo := false; end if;/.test(SQL));
+  t('D34', 'página do anúncio não lê dados privados', !/listing_private|car_private/.test(ler('assets/item.js')));
 
   console.log('Menu da conta');
   await ev(() => document.querySelector('#acct-btn').click()); await p.waitForTimeout(100);

@@ -7,7 +7,8 @@ Um **"Airbnb de estacionamento"** para o Porto: um mercado onde quem tem um luga
 - **Anfitriões** (particulares e empresas) publicam garagens, boxes, lugares em parques ou logradouros. Arrendam à hora, ao dia ou ao mês e ganham dinheiro com espaço que não usam.
 - **Condutores** encontram um lugar perto do destino, filtram pelo que precisam (coberto, fechado, para carrinha…) e reservam.
 - **Carregamento elétrico** é um atributo do lugar: o anfitrião indica o tipo de ligação, a potência e se a energia está incluída ou é paga à parte por kWh. Daí o nome *park 'n' charge*.
-- **Confiança:** cada anúncio é revisto antes de ficar visível. A morada exata só é revelada depois de a reserva ser confirmada. Mais tarde haverá avaliações nos dois sentidos.
+- **Aluguer de carros** (desde a v0.2c): no mesmo site, um separador "Alugar carro" para alugar carros de particulares e empresas à hora, ao dia ou ao mês, com a mesma lógica dos lugares.
+- **Confiança:** cada anúncio é revisto antes de ficar visível. A morada exata só é revelada depois de a reserva ser confirmada. Cada anúncio tem avaliações e comentários; mais tarde serão nos dois sentidos e só depois de uma reserva.
 - **Modelo de negócio (v1.1):** pagamentos dentro da plataforma com Stripe Connect e uma comissão por reserva. Até lá o pagamento é combinado entre as partes, para validar a procura.
 
 O site faz parte da **plataforma `*.frisk.pt`**: vários sites que partilham a mesma infraestrutura (GitHub + Supabase + Cloudflare) e o mesmo sistema de contas. Um utilizador cria a conta uma vez e usa-a em todos os sites. Os dados do Parkncharge ficam separados dos outros sites.
@@ -32,7 +33,9 @@ Plano de versões: [ROADMAP.md](ROADMAP.md) · Histórico e regras que não se p
 ### Ficheiros
 
 ```
-index.html          Explorar: pesquisa, categorias, lugares por zona (público)
+index.html          Explorar: separadores Estacionar | Alugar carro, pesquisa, categorias, mapa, anúncios (público)
+lugar.html          página de um lugar (?id=…)
+carro.html          página de um carro (?id=…)
 login.html          entrar / criar conta / recuperar palavra-passe
 perfil.html         perfil e menu (modo condutor ou anfitrião)
 anfitriao.html      modo anfitrião: os meus lugares, dados de anfitrião, Hoje, Calendário
@@ -45,6 +48,7 @@ ajuda.html          centro de ajuda (âncoras #sobre, #anfitrioes, #carregadores
 termos.html         termos (em preparação, v0.8)
 privacidade.html    privacidade / RGPD (em preparação, v0.8)
 assets/app.js       código comum (objeto global PNC)
+assets/item.js      página de um anúncio (lugar ou carro): galeria, características, avaliações, preço
 assets/style.css    design system
 assets/icon.svg     favicon
 assets/demo/*.svg   ilustrações das garagens de exemplo
@@ -52,6 +56,7 @@ design/             ecrãs de referência do Figma
 docs/modelo-dados.md          tabelas, regras e estado da base de dados
 supabase/migrations/          SQL aplicado no Supabase, por ordem
 supabase/seed/exemplos_sao_mamede.sql   cria (ou recria) as 12 garagens de exemplo
+supabase/seed/exemplos_carros_avaliacoes.sql   cria os 10 carros e as avaliações de exemplo
 tests/regressao.cjs           testes automáticos (Playwright)
 CLAUDE.md                     processo obrigatório para cada alteração
 PATCH NOTES.md                decisões fixas + histórico de versões
@@ -65,7 +70,12 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
 | Função / constante | Para quê |
 |---|---|
 | `APP_VERSAO` | Versão atual (rodapé e Perfil). Atualizar em cada alteração, junto com o `?v=` dos ficheiros em `assets/` nas páginas. |
-| `renderChrome({active, host, header, footer})` | Desenha o cabeçalho com o **menu da conta** (janela do canto superior direito), a barra inferior (telemóvel) e o rodapé. `host: true` usa a barra e o menu do anfitrião. |
+| `renderChrome({active, host, header, footer})` | Desenha o cabeçalho (logótipo + **menu da conta**, a janela do canto superior direito), a barra inferior (telemóvel) e o rodapé. `host: true` usa a barra e o menu do anfitrião. |
+| `MODES` | Configuração dos dois tipos de anúncio, `lugares` e `carros`: tabela, horário, página, categorias, títulos e campos a ler. O Explorar e a página do anúncio usam a mesma lógica para os dois. |
+| `CAR_CATEGORIES`, `CAR_LABELS`, `SEATS` | Categorias de carros, nomes em português (combustível, caixa, extras) e opções de lugares mínimos. |
+| `matchAll(lista, categorias, ids)` | Filtra por várias categorias ao mesmo tempo (o anúncio tem de cumprir todas). |
+| `ratingOf()`, `fmtRating()`, `stars()` | Média e número de avaliações, formato "4,5" e estrelas em SVG. |
+| `estimate(anúncio, início, fim)` | Preço estimado: a combinação mais barata de horas, dias (com horas a mais) e meses. |
 | `DEFAULT_LOC` | Localização por defeito (fictícia): São Mamede de Infesta. |
 | `openNow()`, `nextOpening()`, `availability(l)` | Estado de um lugar agora: `disponivel`, `ocupada` (simulada, `demo_occupied`) ou `fechada` (fora do horário, com a próxima abertura). |
 | `db()` | Cliente Supabase já apontado para o schema `parkncharge` (`plataforma.schema('parkncharge')`). |
@@ -90,13 +100,16 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
 ## Como funciona o site
 
 ### Explorar (`index.html`) — condutor, público
+- **Separadores Estacionar | Alugar carro** por cima da pesquisa (`?tipo=carros`). Os dois modos são a mesma página com a configuração de `PNC.MODES`. O que muda é a tabela lida, as categorias, o terceiro campo da pesquisa (Veículo nos lugares, Lugares mínimos nos carros), os títulos e a página de destino.
 - **Pesquisa** em pílula (Onde · Quando · Veículo) que abre um painel com:
   - zona, rua ou local (com sugestões das zonas do Porto) e botão "usar a minha localização";
   - início e fim;
   - veículo: Mota, Carro, Carrinha, Autocarro, Camião ou Autocaravana.
-- A pesquisa fica no endereço (`?onde=Boavista&inicio=…&fim=…&veiculo=carrinha&cat=carregador`), por isso pode ser partilhada.
-- **Categorias** em barra horizontal: Todos, Com carregador, Coberto, Subterrâneo, Fechado, Acesso fácil, Lugar só seu, Mensal, Motas, Carrinhas.
-- **Lugares:** lê até 300 anúncios **ativos** do Supabase, com o horário (`listing_schedule`), e filtra no browser. A categoria e o veículo filtram todas as secções.
+- A pesquisa fica no endereço (`?tipo=carros&onde=Boavista&inicio=…&fim=…&lugares=5&cat=eletrico,automatico`), por isso pode ser partilhada.
+- **Categorias** em barra horizontal. **Podem ligar-se várias ao mesmo tempo** e o anúncio tem de cumprir todas; "Todos" limpa.
+  - Lugares: Com carregador, Coberto, Subterrâneo, Fechado, Acesso fácil, Lugar só seu, Mensal, Motas, Carrinhas.
+  - Carros: Elétrico, Híbrido, Automático, Citadino, Familiar, SUV, 7 lugares, Carrinhas, Cadeira de bebé, Engate.
+- **Anúncios:** lê até 300 anúncios **ativos** do Supabase, com o horário (`listing_schedule` / `car_schedule`) e as notas das avaliações (`reviews(rating)`), e filtra no browser. Os dados de cada modo ficam em memória ao trocar de separador. Categorias, veículo e lugares filtram todas as secções.
 - **Localização:** por agora arranca sempre em **São Mamede de Infesta** (fictícia).
   - "Usar a minha localização" passa ao GPS e descobre a localidade (Nominatim, reverse).
   - Se isso falhar, usa a zona do lugar mais próximo.
@@ -112,9 +125,30 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
   - **Disponível agora:** aberto pelo horário semanal e livre;
   - **Ocupada:** ocupação simulada (`demo_occupied`) até às reservas da v0.4;
   - **Fechada agora · abre … às …:** fora do horário.
-- **Cartão:** foto de capa, selos "Carregador" e **"Exemplo"**, ❤ (favoritos, só visual até à v0.6), título, zona e minutos a pé, coberto/carregador, estado e preço principal (hora → dia → mês). Os que não estão disponíveis ficam com a foto mais apagada.
-- **Por fazer:** as datas da pesquisa ainda não filtram. Mapa nos resultados, ordenação e página do lugar chegam na v0.3/v0.4.
+- **Cartão** (é um link para a página do anúncio):
+  - foto de capa, selos "Carregador"/"Elétrico" e **"Exemplo"**, ❤ (favoritos, só visual até à v0.6);
+  - título, ★ média (número de avaliações) ou "Novo", zona e minutos a pé;
+  - coberto/carregador, ou combustível · caixa · lugares nos carros;
+  - estado e preço principal (hora → dia → mês).
+  - Os que não estão disponíveis ficam com a foto mais apagada. Os carros mostram "Alugado" / "Indisponível agora".
+- **Por fazer:** as datas da pesquisa ainda não filtram. Mapa nos resultados e ordenação chegam na v0.3.
 - Destaque "Tem um lugar livre?" e lista de zonas do Porto (links de pesquisa, também para SEO).
+
+### Página do anúncio (`lugar.html`, `carro.html` → `assets/item.js`)
+- O tipo vem de `<body data-tipo="lugar|carro">` e o anúncio do `?id=`. A página lê o anúncio com o horário e as fotos, e as avaliações à parte. **Nunca lê dados privados** (morada exata, matrícula).
+- **Topo:** voltar, título, ★ média · n.º de avaliações (link para a secção), zona, selo "Exemplo", galeria (1 foto grande + 2 ao lado no computador).
+- **Características:**
+  - lugar: tipo, coberto, subterrâneo, fechado, só seu, acesso fácil, altura máxima, veículos aceites, tipo de reserva; bloco do carregador (ligação, kW, energia incluída ou €/kWh);
+  - carro: marca/modelo, categoria e ano, combustível e autonomia, caixa, lugares/portas, km incluídos por dia, idade mínima, caução, tipo de reserva; extras (ar condicionado, GPS…).
+- **Descrição**, **horário** da semana (o dia de hoje a negrito) e **zona** num mapa com um círculo de ~300 m. A morada exata é enviada depois da reserva.
+- **Avaliações:**
+  - média grande, estrelas e barras por número de estrelas, depois a lista (nome, mês, estrelas, comentário; selos "Exemplo" e "A sua avaliação").
+  - Formulário de 1 a 5 estrelas + comentário: publicar, editar ou apagar a sua.
+  - Sem sessão aparece "entre na sua conta"; o dono do anúncio vê que não pode avaliar.
+- **Caixa de reserva** (fixa ao lado no computador; no telemóvel aparece logo depois da galeria):
+  - preços (hora, dia, mês) e estado agora;
+  - início e fim (ou levantar e entregar), com o total estimado (`PNC.estimate`);
+  - botão "Reservas em breve" (desativado até à v0.4).
 
 ### Menu da conta (janela do canto superior direito)
 - O botão ☰ + avatar abre uma **janela**, não uma página, em todas as páginas (também no telemóvel).
@@ -196,8 +230,11 @@ Tudo no projeto Supabase partilhado **"Sites"** (`aehitgqsfcpzuunyzpsh`), em dua
 | Morada exata, coordenadas, instruções de acesso | `parkncharge.listing_private` |
 | Fotografias (caminho e ordem) | `parkncharge.listing_photos` + bucket Storage `parkncharge` |
 | Horário semanal | `parkncharge.listing_schedule` |
+| Carros (dados públicos), fotos, horário de levantamento | `parkncharge.cars`, `car_photos`, `car_schedule` |
+| Local exato de recolha, matrícula, instruções | `parkncharge.car_private` |
+| Avaliações (lugares e carros) | `parkncharge.reviews` |
 
-Descrição completa das colunas e das próximas tabelas (reservas, mensagens, avaliações, favoritos): [docs/modelo-dados.md](docs/modelo-dados.md). O SQL está em [`supabase/migrations/`](supabase/migrations/).
+Descrição completa das colunas e das próximas tabelas (reservas, mensagens, favoritos): [docs/modelo-dados.md](docs/modelo-dados.md). O SQL está em [`supabase/migrations/`](supabase/migrations/).
 
 ### Regras no servidor (triggers)
 - **`listings_guard`** (antes de inserir/alterar um anúncio):
@@ -207,6 +244,13 @@ Descrição completa das colunas e das próximas tabelas (reservas, mensagens, a
   - quando o admin aprova, grava quem e quando.
 - **`sync_approx_location`:** ao gravar a morada, calcula `approx_lat/approx_lng` numa grelha de ~300 m. É esta posição que o público vê.
 - **`photos_limit` / `photos_cover`:** máximo de 6 fotografias; a de menor `position` passa a `cover_photo`.
+- **Carros:** `cars_guard`, `sync_car_approx`, `car_photos_limit` e `car_photos_cover` fazem o mesmo para os carros. Ao enviar para análise exigem categoria, combustível, caixa, lugares, local de recolha e fotografia.
+- **`reviews_guard`** (avaliações):
+  - o autor é sempre quem tem a sessão;
+  - o nome mostrado é o primeiro nome do perfil, copiado (o perfil não é público);
+  - só se avaliam anúncios ativos e nunca os próprios;
+  - quem não é admin não pode criar exemplos nem mudar o autor ou o anúncio.
+  - Índices únicos garantem uma avaliação por pessoa e anúncio.
 
 ### Segurança (RLS)
 | Tabela | Quem lê | Quem escreve |
@@ -215,6 +259,9 @@ Descrição completa das colunas e das próximas tabelas (reservas, mensagens, a
 | `listing_private` | só o dono e o admin | só o dono |
 | `listing_photos`, `listing_schedule` | quem pode ver o anúncio | só o dono |
 | `host_profiles` | o próprio e o admin | o próprio |
+| `cars`, `car_photos`, `car_schedule` | iguais a `listings` e às suas fotos/horário | o dono (e o admin) |
+| `car_private` | só o dono e o admin | só o dono |
+| `reviews` | todos | o autor (inserir, editar, apagar); o admin pode apagar |
 | Storage `parkncharge` | leitura pública (fotos dos anúncios) | só na pasta `{user_id}/` do próprio; máx. 5 MB; JPEG, PNG ou WebP |
 
 - As regras foram testadas com SQL como anónimo, outro utilizador, dono e admin.
@@ -265,14 +312,18 @@ Servir a pasta (`python3 -m http.server` ou `npx serve .`) e abrir `http://local
 - Google Fonts: Josefin Sans e Lato.
 - OpenStreetMap: tiles do mapa (Explorar e assistente) e Nominatim (pesquisa de moradas no assistente; localidade ao usar o GPS). O uso é leve: uma pesquisa por clique. Se o tráfego crescer, passar para um fornecedor com chave.
 
-### Garagens de exemplo
+### Exemplos (garagens, carros e avaliações)
 - **12 garagens fictícias:** 7 em São Mamede de Infesta e 5 em Senhora da Hora, Custóias, Paranhos, Leça do Balio e Matosinhos. 2 estão ocupadas e 1 só abre em dias úteis.
-- Estão na conta do administrador, com `is_demo = true`, o selo "Exemplo", ilustrações em `assets/demo/` e moradas sem número de porta.
-- **Recriar:** correr `supabase/seed/exemplos_sao_mamede.sql` no editor SQL do Supabase.
-- **Apagar todas** (antes da beta, v0.8): `delete from parkncharge.listings where is_demo;`
+- **10 carros fictícios:** 6 em São Mamede de Infesta e 4 em Senhora da Hora, Paranhos, Custóias e Matosinhos. Há elétricos, híbrido, 7 lugares, carrinha e GPL; 1 está alugado e 2 só existem em dias úteis.
+- **65 avaliações de exemplo** (2 a 4 por anúncio), com nomes inventados.
+- Tudo na conta do administrador, com `is_demo = true`, o selo "Exemplo", ilustrações em `assets/demo/` e moradas sem número de porta.
+- **Recriar:** correr `supabase/seed/exemplos_sao_mamede.sql` e depois `supabase/seed/exemplos_carros_avaliacoes.sql` no editor SQL do Supabase.
+- **Apagar tudo** (antes da beta, v0.8): `delete from parkncharge.listings where is_demo; delete from parkncharge.cars where is_demo; delete from parkncharge.reviews where is_demo;`
 
-### Limitações conhecidas (v0.2b)
-- Favoritos, Reservas e Mensagens são páginas "em breve".
+### Limitações conhecidas (v0.2c)
+- Favoritos, Reservas e Mensagens são páginas "em breve". O botão de reservar mostra só o preço estimado.
+- Os carros ainda não se publicam pelo modo anfitrião (só existem os de exemplo); a aprovação em `admin.html` é só de lugares.
+- As avaliações são abertas a qualquer conta até haver reservas (v0.4).
 - As datas da pesquisa ainda não filtram.
 - A ocupação é simulada nos exemplos; os lugares reais só ficam "ocupados" com as reservas (v0.4).
 - A localização arranca fixa em São Mamede de Infesta até se usar o GPS.

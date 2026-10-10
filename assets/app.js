@@ -2,7 +2,7 @@
 // Usa o auth.js partilhado (plataforma-core): window.Auth e window.plataforma.
 (function () {
   // Versão atual — atualizar em cada alteração (ver PATCH NOTES.md)
-  const APP_VERSAO = 'v0.2b';
+  const APP_VERSAO = 'v0.2c';
 
   const ICONS = {
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
@@ -38,6 +38,14 @@
     shield: '<path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
     swap: '<path d="M7 7h12l-3-3M17 17H5l3 3"/>',
     logout: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
+    car: '<path d="M3 16v-3l2-5a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 5v3z"/><circle cx="7.5" cy="16.5" r="1.8"/><circle cx="16.5" cy="16.5" r="1.8"/><path d="M5 12h14"/>',
+    parking: '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M10 17V8h3a2.5 2.5 0 0 1 0 5h-3"/>',
+    leaf: '<path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14z"/><path d="M5 19 13 11"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/>',
+    seat: '<path d="M7 4v10h9l2 6"/><path d="M7 14l-1 6"/><path d="M7 9h6"/>',
+    baby: '<circle cx="12" cy="7" r="3"/><path d="M7 21v-5a5 5 0 0 1 10 0v5"/>',
+    hitch: '<path d="M4 12h10"/><circle cx="17" cy="12" r="3"/>',
+    city: '<path d="M3 21V9l5-3v15M8 21V4h8v17M16 21v-9h5v9"/><path d="M11 8h2M11 12h2M11 16h2"/>',
     help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h0"/>',
   };
   function icon(name, cls = '') {
@@ -72,7 +80,7 @@
         <nav class="header-links">
           ${host
             ? '<a href="/">Mudar para condutor</a>'
-            : '<a href="/anfitriao.html" id="hdr-host">Arrendar o meu lugar</a>'}
+            : ''}
           <button class="hdr-profile" id="acct-btn" type="button" aria-label="Menu da conta" aria-haspopup="true" aria-expanded="false">${icon('menu')}<span class="hdr-avatar" id="acct-avatar">${icon('user')}</span></button>
         </nav>
         <div class="acct-menu hidden" id="acct-menu" role="menu"></div>`;
@@ -218,10 +226,44 @@
     return '';
   }
   // Estado agora. Até às reservas (v0.4) a ocupação é simulada nos anúncios de exemplo (demo_occupied).
+  const scheduleOf = l => l.listing_schedule || l.car_schedule || l.schedule || [];
   function availability(l, d = new Date()) {
-    if (l.demo_occupied) return { key: 'ocupada', label: 'Ocupada' };
-    if (!openNow(l.listing_schedule, d)) { const n = nextOpening(l.listing_schedule, d); return { key: 'fechada', label: 'Fechada agora' + (n ? ' · ' + n : '') }; }
+    const car = !!l.car_schedule;
+    if (l.demo_occupied) return { key: 'ocupada', label: car ? 'Alugado' : 'Ocupada' };
+    const sch = scheduleOf(l);
+    if (!openNow(sch, d)) { const n = nextOpening(sch, d); return { key: 'fechada', label: (car ? 'Indisponível agora' : 'Fechada agora') + (n ? ' · ' + n.replace('abre', car ? 'disponível' : 'abre') : '') }; }
     return { key: 'disponivel', label: 'Disponível agora' };
+  }
+
+  // ---------------- Avaliações ----------------
+  function ratingOf(reviews) {
+    const r = (reviews || []).filter(x => x && x.rating);
+    if (!r.length) return { avg: 0, n: 0 };
+    return { avg: r.reduce((a, x) => a + x.rating, 0) / r.length, n: r.length };
+  }
+  const fmtRating = v => v.toFixed(2).replace(/0$/, '').replace('.', ',');
+  function stars(v, cls = '') {
+    return `<span class="stars ${cls}" aria-label="${fmtRating(v)} em 5">` + [1, 2, 3, 4, 5].map(i =>
+      `<svg viewBox="0 0 24 24" class="${v >= i - 0.25 ? 'on' : v >= i - 0.75 ? 'half' : ''}"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>`).join('') + '</span>';
+  }
+
+  // ---------------- Preço estimado ----------------
+  // Escolhe a combinação mais barata entre horas, dias (com horas a mais) e meses
+  function estimate(l, start, end) {
+    const h = (end - start) / 36e5;
+    if (!(h > 0)) return null;
+    const ph = +l.price_hour || 0, pd = +l.price_day || 0, pm = +l.price_month || 0, opts = [];
+    const pl = (n, a, b) => `${n} ${n === 1 ? a : b}`;
+    if (ph) opts.push({ total: Math.ceil(h) * ph, label: `${pl(Math.ceil(h), 'hora', 'horas')} × ${euro(ph)}` });
+    if (pd) {
+      const d = Math.ceil(h / 24);
+      opts.push({ total: d * pd, label: `${pl(d, 'dia', 'dias')} × ${euro(pd)}` });
+      const fd = Math.floor(h / 24), rh = Math.ceil(h - fd * 24);
+      if (ph && fd > 0 && rh > 0 && rh * ph < pd) opts.push({ total: fd * pd + rh * ph, label: `${pl(fd, 'dia', 'dias')} × ${euro(pd)} + ${pl(rh, 'hora', 'horas')} × ${euro(ph)}` });
+    }
+    if (pm) { const m = Math.ceil(h / 720); opts.push({ total: m * pm, label: `${pl(m, 'mês', 'meses')} × ${euro(pm)}` }); }
+    if (!opts.length) return null;
+    return opts.sort((a, b) => a.total - b.total)[0];
   }
 
   // ---------------- Catálogos ----------------
@@ -237,6 +279,45 @@
     { id: 'moto', label: 'Motas', icon: 'moto', match: l => (l.vehicle_types || []).includes('moto') },
     { id: 'grandes', label: 'Carrinhas', icon: 'van', match: l => (l.vehicle_types || []).some(v => ['carrinha', 'autocaravana', 'camiao', 'autocarro'].includes(v)) },
   ];
+  const CAR_CATEGORIES = [
+    { id: 'todos', label: 'Todos', icon: 'all' },
+    { id: 'eletrico', label: 'Elétrico', icon: 'bolt', match: c => c.fuel === 'eletrico' },
+    { id: 'hibrido', label: 'Híbrido', icon: 'leaf', match: c => c.fuel === 'hibrido' },
+    { id: 'automatico', label: 'Automático', icon: 'gear', match: c => c.transmission === 'automatica' },
+    { id: 'citadino', label: 'Citadino', icon: 'city', match: c => c.category === 'citadino' },
+    { id: 'familiar', label: 'Familiar', icon: 'car', match: c => ['familiar', 'monovolume'].includes(c.category) },
+    { id: 'suv', label: 'SUV', icon: 'roof', match: c => c.category === 'suv' },
+    { id: 'sete', label: '7 lugares', icon: 'seat', match: c => (c.seats || 0) >= 7 },
+    { id: 'carrinha', label: 'Carrinhas', icon: 'van', match: c => c.category === 'carrinha' },
+    { id: 'bebe', label: 'Cadeira de bebé', icon: 'baby', match: c => (c.features || []).includes('cadeira_bebe') },
+    { id: 'engate', label: 'Engate', icon: 'hitch', match: c => (c.features || []).includes('engate') },
+  ];
+  const CAR_LABELS = {
+    category: { citadino: 'Citadino', familiar: 'Familiar', suv: 'SUV', carrinha: 'Carrinha', monovolume: 'Monovolume', desportivo: 'Desportivo' },
+    fuel: { gasolina: 'Gasolina', gasoleo: 'Gasóleo', hibrido: 'Híbrido', eletrico: 'Elétrico', gpl: 'GPL' },
+    transmission: { manual: 'Manual', automatica: 'Automática' },
+    features: { ac: 'Ar condicionado', gps: 'GPS', bluetooth: 'Bluetooth', cadeira_bebe: 'Cadeira de bebé', engate: 'Engate', teto_panoramico: 'Teto panorâmico', camara_marcha_atras: 'Câmara de marcha-atrás', cruise_control: 'Cruise control' },
+  };
+  const SEATS = [[0, 'Qualquer'], [2, '2+'], [4, '4+'], [5, '5+'], [7, '7+']];
+  // Os dois tipos de anúncio: lugares (estacionar) e carros (alugar)
+  const MODES = {
+    lugares: {
+      key: 'lugares', label: 'Estacionar', icon: 'parking', table: 'listings', schedule: 'listing_schedule', reviewKey: 'listing_id', page: '/lugar.html',
+      categories: CATEGORIES, localTitle: z => `Garagens em ${z}`, otherTitle: z => `Lugares em ${z}`, noun: ['lugar', 'lugares'],
+      fields: 'id,title,zone,approx_lat,approx_lng,cover_photo,vehicle_types,is_covered,is_underground,is_closed,is_solo,easy_entry,has_charger,charger_kw,price_hour,price_day,price_month,is_demo,demo_occupied',
+    },
+    carros: {
+      key: 'carros', label: 'Alugar carro', icon: 'car', table: 'cars', schedule: 'car_schedule', reviewKey: 'car_id', page: '/carro.html',
+      categories: CAR_CATEGORIES, localTitle: z => `Carros em ${z}`, otherTitle: z => `Carros em ${z}`, noun: ['carro', 'carros'],
+      fields: 'id,title,brand,model,year,category,fuel,transmission,seats,range_km,features,zone,approx_lat,approx_lng,cover_photo,price_hour,price_day,price_month,is_demo,demo_occupied',
+    },
+  };
+  // Lista filtrada por várias categorias ao mesmo tempo (o lugar tem de cumprir todas)
+  function matchAll(list, cats, ids) {
+    const fs = cats.filter(c => ids.includes(c.id) && c.match);
+    return fs.length ? list.filter(l => fs.every(c => c.match(l))) : list;
+  }
+
   const VEHICLES = [
     ['moto', 'Mota'], ['carro', 'Carro'], ['carrinha', 'Carrinha'],
     ['autocarro', 'Autocarro'], ['camiao', 'Camião'], ['autocaravana', 'Autocaravana'],
@@ -318,7 +399,8 @@
   }
 
   window.PNC = {
-    APP_VERSAO, DEFAULT_LOC, openNow, nextOpening, availability, icon, LOGO, renderChrome, db, photoUrl, BUCKET, currentUser, requireLogin, isAdmin, displayName,
+    APP_VERSAO, DEFAULT_LOC, openNow, nextOpening, availability, scheduleOf, ratingOf, fmtRating, stars, estimate,
+    CAR_CATEGORIES, CAR_LABELS, SEATS, MODES, matchAll, icon, LOGO, renderChrome, db, photoUrl, BUCKET, currentUser, requireLogin, isAdmin, displayName,
     CATEGORIES, VEHICLES, SPOT_TYPES, ZONES, CHARGERS, WEEKDAYS, STATUS,
     euro, mainPrice, esc, distance, walkText, toast, greeting, authError, dbError, SITE_ID: 'parkncharge',
   };

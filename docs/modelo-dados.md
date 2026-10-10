@@ -11,12 +11,16 @@ separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque
 | Tipo de anfitrião, NIF, dados de empresa | `parkncharge.host_profiles` |
 | Lugares, fotos, horários, preços | `parkncharge.listings`, `listing_photos`, `listing_schedule` |
 | Morada exata, coordenadas, instruções de acesso | `parkncharge.listing_private` (só dono/admin) |
-| Reservas, mensagens, avaliações, favoritos | `parkncharge.bookings`, `messages`, `reviews`, `favorites` |
+| Carros (dados públicos) | `parkncharge.cars`, `car_photos`, `car_schedule` |
+| Local exato de recolha, matrícula, instruções | `parkncharge.car_private` (só dono/admin) |
+| Avaliações de lugares e carros | `parkncharge.reviews` (públicas) |
+| Reservas, mensagens, favoritos | `parkncharge.bookings`, `messages`, `favorites` |
 
 ## Estado
 - v0.2 (aplicado): `host_profiles`, `listings`, `listing_private`, `listing_photos`, `listing_schedule`, bucket `parkncharge`.
 - v0.2b (aplicado): `listings.is_demo` e `listings.demo_occupied` (exemplos e ocupação simulada, só o admin os liga). Exemplos em `supabase/seed/exemplos_sao_mamede.sql`.
-- A seguir: `bookings` (v0.4), `messages` (v0.5), `reviews` e `favorites` (v0.6).
+- v0.2c (aplicado): carros (`cars`, `car_private`, `car_photos`, `car_schedule`, com as mesmas regras dos lugares) e `reviews` (lugares e carros). Exemplos em `supabase/seed/exemplos_carros_avaliacoes.sql`.
+- A seguir: `bookings` (v0.4), `messages` (v0.5), `favorites` (v0.6).
 
 ## Regras nos triggers (v0.2)
 - O anfitrião nunca se auto-aprova: só pode passar rascunho/recusado → pendente, pendente → rascunho, ativo ↔ pausado.
@@ -40,7 +44,13 @@ separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque
   `status` (pedido/confirmada/recusada/cancelada/concluída), `created_at`
   - Restrição de exclusão (`btree_gist`) para impedir reservas confirmadas sobrepostas no mesmo lugar
 - **messages** — `id`, `booking_id`, `sender_id`, `body`, `created_at`
-- **reviews** — `id`, `booking_id`, `author_id`, `target` (lugar/condutor), `rating` 1–5, `comment`, `created_at`
+- **cars** — como `listings`, mas com `brand`, `model`, `year`, `category` (citadino/familiar/suv/carrinha/monovolume/desportivo), `fuel` (gasolina/gasoleo/hibrido/eletrico/gpl), `transmission` (manual/automatica), `seats`, `doors`, `range_km`, `features[]` (ac, gps, bluetooth, cadeira_bebe, engate, teto_panoramico, camara_marcha_atras, cruise_control), `km_included_day`, `min_age`, `deposit`
+- **car_private** — `car_id`, `address`, `lat`, `lng`, `plate`, `pickup_instructions`
+- **car_photos** — `id`, `car_id`, `storage_path`, `position` (máx. 6)
+- **car_schedule** — `car_id`, `weekday`, `opens_at`, `closes_at` (quando se pode levantar)
+- **reviews** — `id`, `listing_id` **ou** `car_id`, `author_id`, `author_name` (primeiro nome copiado do perfil, que não é público), `rating` 1–5, `comment`, `is_demo`, `created_at`, `updated_at`
+  - 1 por pessoa e anúncio (índices únicos, exceto exemplos); o trigger `reviews_guard` impede avaliar anúncios não ativos ou os próprios e só deixa o admin criar exemplos
+  - v0.4: ligar a `booking_id` e exigir reserva concluída
 - **favorites** — `user_id`, `listing_id`
 
 ## Regras de acesso (RLS)

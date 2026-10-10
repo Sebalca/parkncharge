@@ -48,13 +48,23 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 - [x] Lista em cartões das garagens da localidade (mesmo ocupadas), com estado Disponível / Ocupada / Fechada *(v0.2b)*
 - [x] Localização atual: São Mamede de Infesta (fictícia) + botão "usar a minha localização" (GPS) *(v0.2b)*
 - [x] Morada/zona pesquisada (grelha de resultados) *(v0.1a)*
-- [x] Filtros: categorias e veículo *(v0.1a)*
+- [x] Filtros: categorias e veículo *(v0.1a)*; várias categorias ao mesmo tempo *(v0.2c)*
 - [ ] Filtros: ordenação (melhor avaliados, mais usados, proximidade) e hora de início/fim a filtrar pelo horário
 - [ ] Mapa também nos resultados da pesquisa (alternar lista ↔ mapa no telemóvel)
 - [ ] Pesquisa por proximidade no servidor (PostGIS) — por agora a distância é calculada no browser
 
+## Aluguer de carros (nova linha, pedida em 10/10/2026)
+- [x] Separador "Alugar carro" por cima da pesquisa, com o Explorar replicado para carros (mapa, localidade, outras zonas, filtros múltiplos) *(v0.2c)*
+- [x] Página do carro com características, extras, horário de levantamento, zona, avaliações e preço estimado *(v0.2c)*
+- [x] Base de dados de carros com as mesmas regras dos lugares + 10 carros de exemplo *(v0.2c)*
+- [ ] Publicar carros no modo anfitrião (assistente) e aprová-los em `admin.html`
+- [ ] Reservas de carros (com as reservas da v0.4) e documentos do condutor (carta de condução)
+- [ ] Verificar o enquadramento legal do aluguer entre particulares antes da beta
+
 ## v0.4 — Página do lugar e reservas
-- [ ] Página do lugar: fotos, atributos, horário, avaliação média, comentários, botão "Reservar"
+- [x] Página do lugar: fotos, atributos, horário, zona no mapa, avaliação média, comentários *(v0.2c)*
+- [x] Preço calculado para as datas escolhidas *(v0.2c)*
+- [ ] Botão "Reservar" a funcionar (agora diz "Reservas em breve")
 - [ ] Pedido de reserva com datas/horas e preço calculado
 - [ ] Reserva instantânea ou com aprovação do anfitrião
 - [ ] Sem reservas sobrepostas (restrição na base de dados)
@@ -67,7 +77,8 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 - [ ] Instruções de acesso (código, piso, nº do lugar) só visíveis após confirmação
 
 ## v0.6 — Confiança
-- [ ] Avaliações e comentários nos dois sentidos, só após reserva concluída
+- [x] Avaliações e comentários dos anúncios (estrelas + texto, 1 por pessoa, editar/apagar) *(v0.2c — por agora qualquer conta)*
+- [ ] Avaliações só após reserva concluída, e do anfitrião ao condutor (nos dois sentidos)
 - [ ] Favoritos (coração)
 - [ ] Denúncias e painel de administração
 
@@ -77,7 +88,7 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 - [ ] Páginas de ajuda, FAQ e contacto
 
 ## v0.8 — Beta fechada no Porto
-- [ ] Apagar as garagens de exemplo (`delete from parkncharge.listings where is_demo;`) e retirar a ocupação simulada
+- [ ] Apagar os exemplos (`delete from parkncharge.listings where is_demo; delete from parkncharge.cars where is_demo; delete from parkncharge.reviews where is_demo;`) e retirar a ocupação simulada
 - [ ] PWA instalável (manifest, ícones, offline básico)
 - [ ] Termos de utilização e política de privacidade (RGPD)
 - [ ] Pagamento combinado entre as partes (indicação clara na reserva)

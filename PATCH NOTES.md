@@ -29,15 +29,20 @@ Regras que o Sebastião pediu explicitamente. Antes de qualquer alteração ou n
 
 **Explorar (condutor)**
 - D20 Sem conta pode-se ver tudo; a conta só é pedida para reservar, guardar favoritos, falar com anfitriões ou publicar.
-- D21 Barra inferior (telemóvel), como no Airbnb: **Explorar, Favoritos, Reservas, Mensagens, Perfil**. No computador: cabeçalho com "Arrendar o meu lugar" e menu do perfil.
+- D21 Barra inferior (telemóvel), como no Airbnb: **Explorar, Favoritos, Reservas, Mensagens, Perfil**. Cabeçalho só com o logótipo e o menu da conta — **sem botão "Arrendar o meu lugar"** (está na janela do menu). (atualizada v0.2c)
 - D22 Pesquisa em pílula no topo: **Onde · Quando (início e fim) · Veículo**, que abre um painel. Substitui o "Good Morning" do Figma.
-- D23 O carregador é uma **categoria/filtro** ("Com carregador"), sem separador próprio. Categorias: Todos, Com carregador, Coberto, Subterrâneo, Fechado, Acesso fácil, Lugar só seu, Mensal, Motas, Carrinhas.
+- D23 O carregador é uma **categoria/filtro** ("Com carregador"), sem separador próprio. Categorias: Todos, Com carregador, Coberto, Subterrâneo, Fechado, Acesso fácil, Lugar só seu, Mensal, Motas, Carrinhas. **Podem ligar-se várias ao mesmo tempo** e o anúncio tem de cumprir todas; "Todos" limpa. (atualizada v0.2c)
 - D24 Explorar sem pesquisa: **mapa "Perto de si"** com as garagens disponíveis mais próximas; por baixo, **todas as garagens da localidade onde estou (mesmo ocupadas)**; no fim, carrosséis das outras zonas. Com pesquisa por texto: grelha. Categoria e veículo filtram tudo. (atualizada v0.2b — antes só carrosséis por zona)
 - D25 A versão do site aparece no rodapé.
 - D27 O botão do canto superior direito (☰ + avatar) abre uma **janela** (como nas Finanças), não uma página: Entrar/Criar conta ou nome, Mudar para anfitrião/condutor, atalhos, Aprovação (admin), Perfil, Ajuda, Terminar sessão, e a versão no canto. Fecha ao clicar fora, mas não quando se carrega dentro e se larga fora. Existe também no telemóvel (cabeçalho compacto).
 - D28 Localização por defeito: **São Mamede de Infesta** (fictícia, por agora). "Usar a minha localização" passa ao GPS real e descobre a localidade.
 - D29 Estado de cada lugar: **Disponível agora** (aberto pelo horário e livre), **Ocupada** (ocupação simulada até às reservas da v0.4) ou **Fechada agora** (fora do horário, com a próxima abertura). O mapa mostra só as disponíveis (até 8, num raio de 5 km).
 - D26 `assets/app.js` e `assets/style.css` são carregados com `?v=<versão>` em todas as páginas, para os visitantes receberem logo a versão nova.
+
+- D60 Por cima da pesquisa há os separadores **Estacionar | Alugar carro**. "Alugar carro" é uma réplica do Explorar (mapa, "Carros em <localidade>" mesmo alugados, outras zonas, filtros múltiplos, página do carro, avaliações), com categorias próprias (Elétrico, Híbrido, Automático, Citadino, Familiar, SUV, 7 lugares, Carrinhas, Cadeira de bebé, Engate) e o terceiro campo da pesquisa = Lugares.
+- D61 Carregar num cartão (ou em "Ver lugar/carro" no mapa) abre a **página do anúncio**: `lugar.html?id=…` ou `carro.html?id=…`.
+- D62 **Avaliações** (1–5 estrelas + comentário) em todos os anúncios, com a média e o número no cartão e na página. Por agora qualquer conta avalia, uma vez por anúncio, e pode editar ou apagar; ninguém avalia os próprios anúncios (regra no servidor). Na v0.4 passa a exigir reserva concluída.
+- D63 Na página do anúncio, a caixa de reserva calcula o **preço estimado** (a combinação mais barata de horas, dias e meses). O botão diz "Reservas em breve" até à v0.4.
 
 **Anfitrião**
 - D30 Modo anfitrião separado, com "Mudar para anfitrião" / "Mudar para condutor" no perfil. Barra inferior: **Hoje, Calendário, Lugares, Mensagens, Menu**.
@@ -49,7 +54,7 @@ Regras que o Sebastião pediu explicitamente. Antes de qualquer alteração ou n
 - D36 Recusar um anúncio exige um motivo, que o anfitrião vê na lista dos seus lugares.
 
 **Dados de exemplo**
-- D50 Garagens de exemplo (12, em São Mamede de Infesta e arredores) têm sempre o selo **"Exemplo"**, ilustrações próprias e moradas sem número. Só o admin pode criar exemplos ou ocupação simulada (regra no servidor). Apagam-se todas antes da beta (v0.8). Script: `supabase/seed/exemplos_sao_mamede.sql`.
+- D50 Garagens (12), carros (10) e avaliações (65) de exemplo, em São Mamede de Infesta e arredores, têm sempre o selo **"Exemplo"**, ilustrações próprias, moradas sem número e nomes inventados. Só o admin pode criar exemplos ou ocupação simulada (regra no servidor). Apagam-se todos antes da beta (v0.8). Scripts: `supabase/seed/exemplos_sao_mamede.sql` e `supabase/seed/exemplos_carros_avaliacoes.sql`.
 
 **Segurança**
 - S01 Nunca pôr chaves privadas no código (só a chave pública do Supabase, via `plataforma-core`). As regras de acesso são RLS no servidor.
@@ -57,6 +62,20 @@ Regras que o Sebastião pediu explicitamente. Antes de qualquer alteração ou n
 ---
 
 ## Histórico
+
+### v0.2c — 10/10/2026
+- Página de cada garagem e carro (`lugar.html`, `carro.html`, código em `assets/item.js`):
+  - galeria e características (tipo e atributos; no carro: marca, combustível, caixa, lugares, km/dia, idade mínima, caução, extras);
+  - carregador, descrição, horário da semana e zona aproximada no mapa (círculo de ~300 m; a morada exata só depois da reserva);
+  - avaliações e caixa de reserva com o preço estimado.
+- Cartões e pinos do mapa abrem essa página.
+- Avaliações e comentários em todos os anúncios: estrelas e média no cartão, resumo com barras, lista, formulário para escrever, editar ou apagar. Uma por pessoa e anúncio, nunca nos próprios (regras no servidor, testadas).
+- Avaliações de exemplo (36 em garagens, 29 em carros), com o selo "Exemplo".
+- Filtros: várias categorias ao mesmo tempo (o anúncio cumpre todas); "Todos" limpa (D23 alterada, confirmado).
+- Cabeçalho sem o botão "Arrendar o meu lugar", que já está no menu da conta (D21 alterada, confirmado).
+- Separador **Estacionar | Alugar carro** por cima da pesquisa. "Alugar carro" replica o Explorar com 10 carros de exemplo (6 em São Mamede de Infesta; um deles alugado) e ilustrações próprias.
+- Base de dados (migração `20261010_v02c_carros_avaliacoes.sql`): tabelas `cars`, `car_private`, `car_photos`, `car_schedule` (mesmas regras dos lugares) e `reviews`. Publicar carros (anfitrião) fica para a próxima versão.
+- Segurança: a função temporária usada para criar os carros de exemplo ficou desativada e sem permissões. Confirmado que não foi usada. Pode ser apagada no Supabase (`drop function parkncharge.tmp_seed_car(jsonb);`).
 
 ### v0.2b — 27/09/2026
 - Menu da conta: o botão do canto superior direito abre uma janela (antes ia para a página Perfil). No telemóvel aparece um cabeçalho compacto com o mesmo botão. O cabeçalho completo passa a aparecer a partir de 700 px (antes 900 px).
