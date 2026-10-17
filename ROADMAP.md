@@ -5,7 +5,7 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 
 **Decisões base**
 - Anfitriões: particulares **e** empresas.
-- Reservas: por hora, por dia e mensais. O anfitrião escolhe, por anúncio, reserva instantânea ou com aprovação.
+- Reservas: por hora, por dia e mensais, sempre instantâneas (desde a v0.4a).
 - Pagamentos: combinados entre as partes até à v1.0; **Stripe Connect na v1.1**.
 - Domínio: `parkncharge.frisk.pt` (login partilhado da plataforma); domínio próprio mais tarde.
 - Dados: tabelas próprias num schema `parkncharge` no Supabase partilhado (ver [docs/modelo-dados.md](docs/modelo-dados.md)).
@@ -67,14 +67,15 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 - [x] Preço calculado para as datas escolhidas *(v0.2c)*
 - [x] Botão "Reservar" / "Pedir reserva" a funcionar, para lugares e carros *(v0.4)*
 - [x] Pedido de reserva com datas/horas, veículo, mensagem e preço calculado no servidor *(v0.4)*
-- [x] Reserva instantânea ou com aprovação do anfitrião (prazo de 24 h ou até ao início) *(v0.4)*
+- [x] Reserva instantânea ou com aprovação do anfitrião (prazo de 24 h ou até ao início) *(v0.4)* → sempre instantânea *(v0.4a)*
+- [x] "Entrar como" conta de teste (só admin) para experimentar os dois lados *(v0.4a)*
 - [x] Sem reservas sobrepostas (restrição na base de dados) e dentro do horário *(v0.4)*
 - [x] Estados: pedido → confirmada → a decorrer → concluída / cancelada / recusada / expirada *(v0.4)*
 
-## v0.5 — As minhas reservas e comunicação
+## v0.5 — As minhas reservas e comunicação ✅ (17/10/2026)
 - [x] "My rents": Reservas (condutor) e Hoje/Calendário (anfitrião) *(adiantado para a v0.4)*
-- [ ] Mensagens condutor ↔ anfitrião por reserva
-- [ ] Emails automáticos (pedido, confirmação, lembrete) via Edge Function
+- [x] Mensagens condutor ↔ anfitrião: uma conversa por anúncio e pessoa, perguntas antes de reservar, contactos escondidos até reservar *(v0.5)*
+- [ ] Emails automáticos (confirmação, lembrete, nova mensagem) via Edge Function — *adiado: para já sem emails*
 - [x] Morada e instruções de acesso só visíveis após confirmação *(adiantado para a v0.4)*
 
 ## v0.6 — Confiança

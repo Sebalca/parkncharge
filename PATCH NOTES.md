@@ -23,7 +23,7 @@ Regras que o Sebastião pediu explicitamente. Antes de qualquer alteração ou n
 - D06 Site web primeiro (PWA instalável na v0.8), app nativa depois. Morada: `parkncharge.frisk.pt`; domínio próprio mais tarde.
 - D07 Lançamento só no Porto.
 - D08 Anfitriões particulares **e** empresas no mesmo mercado.
-- D09 Reservas à hora, ao dia e ao mês. Em cada anúncio o anfitrião escolhe reserva instantânea ou com aprovação.
+- D09 Reservas à hora, ao dia e ao mês. **Todas as reservas são instantâneas** (o anfitrião não aprova pedidos). (atualizada v0.4a — antes o anfitrião escolhia instantânea ou com aprovação)
 - D10 Pagamentos combinados entre condutor e anfitrião até à v1.0; **Stripe Connect só na v1.1**.
 - D11 Dados do Parkncharge num schema próprio `parkncharge` (tabelas próprias), não na tabela genérica `user_site_data`.
 
@@ -45,13 +45,19 @@ Regras que o Sebastião pediu explicitamente. Antes de qualquer alteração ou n
 - D63 Na página do anúncio, a caixa de reserva calcula o **preço** (a combinação mais barata de horas, dias e meses), igual ao que o servidor grava. (atualizada v0.4)
 
 **Reservas**
-- D70 Reservas de **lugares e carros**, numa só tabela e com as mesmas regras. O preço e o estado são sempre decididos no servidor. Não há reservas sobrepostas: as confirmadas e os pedidos ainda por responder bloqueiam o período.
-- D71 Anúncio com reserva instantânea → fica **confirmada** logo. Com aprovação → **pedido**, que o anfitrião aceita ou recusa até **24 h ou até ao início** (o que vier primeiro); depois expira sozinho.
-- D72 **Cancelar:** o condutor cancela um pedido a qualquer momento e uma reserva confirmada até ao início. O anfitrião cancela uma reserva confirmada, sempre com um **motivo**, que o condutor vê. A política de reembolso fica para a v1.1 (pagamentos).
+- D70 Reservas de **lugares e carros**, numa só tabela e com as mesmas regras. O preço e o estado são sempre decididos no servidor. Não há reservas sobrepostas: as confirmadas bloqueiam o período.
+- D71 Toda a reserva fica **confirmada** logo (reserva instantânea, regra no servidor). Não há pedidos, aceitar/recusar nem prazos. (atualizada v0.4a — antes havia pedidos com aprovação em 24 h)
+- D72 **Cancelar:** o condutor cancela uma reserva confirmada até ao início. O anfitrião cancela uma reserva confirmada, sempre com um **motivo**, que o condutor vê. A política de reembolso fica para a v1.1 (pagamentos).
 - D73 **Horário:** num lugar, o período inteiro tem de caber no horário; num carro, levantar e entregar têm de estar dentro do horário. Reservas de **30 dias ou mais** ignoram o horário semanal.
 - D74 A **morada exata** e as **instruções de acesso** (no carro: local de recolha, matrícula e instruções) aparecem ao condutor quando a reserva é confirmada, e até ao fim da reserva. São servidas por uma função no servidor, só a esse condutor.
-- D75 **Gestão:** o condutor tem a página **Reservas** (Próximas, Anteriores, Canceladas). O anfitrião tem **Hoje** (pedidos por responder, chegadas, saídas, a decorrer) e **Calendário** (próximos 30 dias), onde aceita, recusa ou cancela.
-- D76 Estados mostrados: Pedido enviado, Confirmada, A decorrer, Concluída, Recusada, Cancelada, Expirada. "A decorrer" e "Concluída" vêm das datas.
+- D75 **Gestão:** o condutor tem a página **Reservas** (Próximas, Anteriores, Canceladas). O anfitrião tem **Hoje** (chegadas, saídas, a decorrer) e **Calendário** (próximos 30 dias), onde pode cancelar com motivo. (atualizada v0.4a)
+- D76 Estados mostrados: Confirmada, A decorrer, Concluída, Cancelada (Pedido, Recusada e Expirada só aparecem em reservas antigas). "A decorrer" e "Concluída" vêm das datas.
+- D77 **Entrar como (só administrador):** no menu da conta e no Perfil, o admin pode entrar numa das **duas contas de teste** ("Condutor Teste" e "Anfitrião Teste") para experimentar o outro lado, com uma faixa laranja e o botão **Voltar à minha conta**. Nunca contas reais. A troca é feita no servidor (Edge Function `parkncharge-entrar-como`, que confirma que quem pede é admin); a chave de serviço fica só no Supabase. Na primeira entrada, o Anfitrião Teste fica dono de metade dos exemplos (e das reservas deles).
+
+**Mensagens**
+- D80 Uma **conversa por anúncio e por condutor** (como no Airbnb): começa com uma pergunta antes de reservar ("Contactar o anfitrião" na página do anúncio) e continua depois; as reservas desse condutor nesse anúncio aparecem no topo da conversa. Também se abre a partir das Reservas (condutor) e do Hoje/Calendário (anfitrião). A mensagem escrita ao reservar também vai para a conversa.
+- D81 **Telefones e emails ficam escondidos** (•••) até haver uma reserva confirmada entre os dois nesse anúncio. Feito no servidor, ao gravar a mensagem.
+- D82 Só os dois participantes (e o admin) veem a conversa. Ninguém edita nem apaga mensagens. O anfitrião só pode começar uma conversa com quem reservou o anúncio. A página Mensagens separa **Como condutor** e **Como anfitrião**, e a barra inferior mostra o número de conversas por ler.
 
 **Anfitrião**
 - D30 Modo anfitrião separado, com "Mudar para anfitrião" / "Mudar para condutor" no perfil. Barra inferior: **Hoje, Calendário, Lugares, Mensagens, Menu**.
@@ -71,6 +77,23 @@ Regras que o Sebastião pediu explicitamente. Antes de qualquer alteração ou n
 ---
 
 ## Histórico
+
+### v0.5 — 17/10/2026
+- **Mensagens** entre condutor e anfitrião (`mensagens.html`):
+  - uma conversa por anúncio e por condutor, que começa antes de reservar e continua depois;
+  - **Contactar o anfitrião** na página do lugar/carro; botão **Mensagem** nas Reservas (condutor) e no Hoje/Calendário (anfitrião);
+  - lista com **Como condutor / Como anfitrião**, último texto, hora e ponto laranja nas por ler; número de por ler na barra inferior;
+  - dentro da conversa: as reservas desse condutor nesse anúncio, as mensagens por dia e um campo para escrever (Enter envia; atualiza a cada 8 s);
+  - **telefones e emails escondidos** até haver uma reserva confirmada (no servidor), com aviso;
+  - a mensagem escrita ao reservar também fica na conversa.
+- Base de dados: tabelas `conversations` e `messages`, funções `open_conversation`, `mark_conversation_read`, `unread_conversations`; RLS testada (outro utilizador não vê nem escreve; anfitrião só abre conversa com quem reservou; ninguém edita/apaga).
+- Sem emails automáticos por agora (decisão de 17/10/2026).
+- Testes: D80, D81, D82.
+
+### v0.4a — 17/10/2026
+- **Reservas sempre instantâneas:** o anfitrião deixa de aprovar pedidos. Saiu a escolha do assistente de publicação, o "Pedir reserva", o prazo de 24 h e o Aceitar/Recusar do Hoje. Os 2 pedidos de exemplo pendentes passaram a confirmados. Decisões D09, D71, D75 e D76 atualizadas.
+- **Entrar como (só para o administrador):** no menu da conta e no Perfil, "Experimentar como" → Condutor Teste ou Anfitrião Teste, com faixa laranja e "Voltar à minha conta". A troca é feita por uma Edge Function do Supabase que só aceita administradores e só entra nas duas contas de teste. O Anfitrião Teste fica dono de metade dos exemplos. Nova decisão D77.
+- Testes: D09, D71 e D75 atualizados; D77 novo; S01 passa a verificar também a Edge Function.
 
 ### v0.4 — 17/10/2026
 - **Reservas** de lugares e carros:

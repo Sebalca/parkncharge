@@ -2,7 +2,7 @@
 // Usa o auth.js partilhado (plataforma-core): window.Auth e window.plataforma.
 (function () {
   // Versão atual — atualizar em cada alteração (ver PATCH NOTES.md)
-  const APP_VERSAO = 'v0.4';
+  const APP_VERSAO = 'v0.5';
 
   const ICONS = {
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
@@ -96,6 +96,7 @@
       `<a href="${href}" class="${label === active ? 'active' : ''}">${icon(k)}<span>${label}</span></a>`
     ).join('') + '</div>';
     document.body.appendChild(nav);
+    unreadBadge(host);
     // Rodapé
     if (footer) {
       const f = document.createElement('footer');
@@ -108,6 +109,15 @@
         </div>
         <p class="foot-legal">© ${new Date().getFullYear()} Parkncharge · parte da plataforma frisk.pt · Porto, Portugal · <span id="app-versao">${APP_VERSAO}</span></p>`;
       document.body.appendChild(f);
+    }
+    // Faixa "conta de teste" (Entrar como, só admin)
+    const tm = testMode();
+    if (tm && tm.nome) {
+      const bar = document.createElement('div');
+      bar.className = 'test-bar'; bar.id = 'test-bar';
+      bar.innerHTML = `<span>${icon('user')} A experimentar como <b>${esc(tm.nome)}</b> (conta de teste)</span><button type="button" id="test-back">Voltar à minha conta</button>`;
+      document.body.prepend(bar);
+      bar.querySelector('#test-back').onclick = () => voltarConta();
     }
     document.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = icon(el.dataset.icon));
   }
@@ -160,9 +170,83 @@
       ${host ? a('/anfitriao.html', 'garage', 'Os meus lugares') + a('/publicar.html', 'plus', 'Publicar um novo lugar') + a('/anfitriao.html?v=perfil', 'user', 'Dados de anfitrião')
              : a('/reservas.html', 'bookings', 'Reservas') + a('/favoritos.html', 'heart', 'Favoritos') + a('/mensagens.html', 'chat', 'Mensagens')}
       ${admin ? a('/admin.html', 'shield', 'Aprovação de anúncios') : ''}
+      ${testSwitchHTML(admin, 'menuitem')}
       <hr>${a('/perfil.html' + (host ? '?modo=anfitriao' : ''), 'user', 'Perfil')}${a('/ajuda.html', 'help', 'Centro de ajuda')}
-      <button role="menuitem" type="button" id="acct-logout">${icon('logout')}<span>Terminar sessão</span></button>`;
-    menu.querySelector('#acct-logout').onclick = async () => { await Auth.signOut(); location.replace('/'); };
+      ${testMode() ? '' : `<button role="menuitem" type="button" id="acct-logout">${icon('logout')}<span>Terminar sessão</span></button>`}`;
+    const lo = menu.querySelector('#acct-logout');
+    if (lo) lo.onclick = async () => { await Auth.signOut(); location.replace('/'); };
+    bindTestSwitch(menu);
+  }
+
+  // ---------------- Entrar como conta de teste (só para o admin) ----------------
+  // A troca é feita no servidor (Edge Function parkncharge-entrar-como, que só aceita administradores
+  // e só entra nas duas contas de teste). Aqui guarda-se apenas o token para voltar à conta do admin.
+  const VOLTAR_KEY = 'pnc_voltar';
+  const TEST_ACCOUNTS = [['condutor', 'Condutor Teste', 'car'], ['anfitriao', 'Anfitrião Teste', 'garage']];
+  function testMode() { try { return JSON.parse(localStorage.getItem(VOLTAR_KEY)); } catch (e) { return null; } }
+  function setTestMode(v) { try { v ? localStorage.setItem(VOLTAR_KEY, JSON.stringify(v)) : localStorage.removeItem(VOLTAR_KEY); } catch (e) { } }
+  function testSwitchHTML(admin, role = '') {
+    const tm = testMode();
+    if (!admin && !tm) return '';
+    return `<div class="test-switch"><small>Experimentar como (só administrador)</small>
+      ${TEST_ACCOUNTS.filter(([k]) => !tm || tm.conta !== k).map(([k, label, ic]) => `<button type="button" ${role ? `role="${role}"` : ''} data-entrar="${k}">${icon(ic)}<span>${label}</span></button>`).join('')}
+      ${tm ? `<button type="button" ${role ? `role="${role}"` : ''} data-voltar>${icon('swap')}<span>Voltar à minha conta</span></button>` : ''}</div>`;
+  }
+  function bindTestSwitch(root) {
+    root.querySelectorAll('[data-entrar]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try { await entrarComo(b.dataset.entrar); location.replace(b.dataset.entrar === 'anfitriao' ? '/anfitriao.html?v=hoje' : '/'); }
+      catch (e) { b.disabled = false; toast(e.message || 'Não foi possível entrar na conta de teste.', 'err'); }
+    });
+    root.querySelectorAll('[data-voltar]').forEach(b => b.onclick = () => voltarConta());
+  }
+  async function entrarComo(conta) {
+    if (testMode()) await voltarConta(false);          // trocar de conta de teste: volta primeiro à do admin
+    const { data: { session } } = await plataforma.auth.getSession();
+    if (!session) throw new Error('Entre primeiro na sua conta.');
+    const { data, error } = await plataforma.functions.invoke('parkncharge-entrar-como', { body: { conta } });
+    if (error || !data || !data.token_hash) {
+      let msg = 'Não foi possível entrar na conta de teste.';
+      try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) { }
+      throw new Error(msg);
+    }
+    setTestMode({ refresh_token: session.refresh_token, email: session.user.email, conta, nome: data.nome });
+    const { error: e2 } = await plataforma.auth.verifyOtp({ token_hash: data.token_hash, type: 'magiclink' });
+    if (e2) { await voltarConta(false); throw new Error('Não foi possível entrar na conta de teste.'); }
+  }
+  // ---------------- Mensagens ----------------
+  // Abre (ou cria) a conversa sobre um anúncio. Condutor: { listing } ou { car }. Anfitrião: + { guest }.
+  async function openConversation({ listing = null, car = null, guest = null }, btn) {
+    const u = await currentUser();
+    if (!u) { location.href = '/login.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
+    if (btn) btn.disabled = true;
+    const args = { p_listing: listing, p_car: car };
+    if (guest) args.p_guest = guest;
+    const { data, error } = await db().rpc('open_conversation', args);
+    if (btn) btn.disabled = false;
+    if (error || !data) return toast(error ? dbError(error) : 'Não foi possível abrir a conversa.', 'err');
+    location.href = `/mensagens.html?c=${data}${guest ? '&modo=anfitriao' : ''}`;
+  }
+  // Número de conversas por ler, na barra inferior (Mensagens)
+  async function unreadBadge(host) {
+    const d = db(); if (!d || !(await currentUser())) return;
+    const { data } = await d.rpc('unread_conversations');
+    const r = data && data[0]; if (!r) return;
+    const n = host ? r.as_host : r.as_guest;
+    document.querySelectorAll('.nav a[href^="/mensagens.html"]').forEach(a => {
+      let b = a.querySelector('.nav-badge');
+      if (!n) { if (b) b.remove(); return; }
+      if (!b) { b = document.createElement('i'); b.className = 'nav-badge'; a.appendChild(b); }
+      b.textContent = n > 9 ? '9+' : n;
+    });
+  }
+
+  async function voltarConta(reload = true) {
+    const tm = testMode(); if (!tm) return;
+    setTestMode(null);
+    const { error } = await plataforma.auth.refreshSession({ refresh_token: tm.refresh_token });
+    if (error) { try { await plataforma.auth.signOut({ scope: 'local' }); } catch (e) { } location.replace('/login.html'); return; }
+    if (reload) location.replace('/');
   }
 
   // ---------------- Dados ----------------
@@ -439,14 +523,14 @@
     if (/schema must be one of|invalid schema/i.test(m)) return 'O servidor ainda não está configurado para o Parkncharge. Tente mais tarde.';
     if (/row-level security|permission denied/i.test(m)) return 'Sem permissão para esta operação.';
     if (err.code === '23P01' || /exclusion|sem_sobreposicao/i.test(m)) return 'Já existe uma reserva nesse período. Escolha outras datas.';
-    if (/Falta|Indique|Complete|Adicione|Máximo|Guarde|Alteração|Fora do horário|reserva|Reserva|Não pode|Este anúncio|Este pedido|Só quem|Só se podem|já/.test(m)) return m;
+    if (/Falta|Indique|Complete|Adicione|Máximo|Guarde|Alteração|Fora do horário|reserva|Reserva|Não pode|Este anúncio|Este pedido|Só quem|Só se podem|Só o anfitrião|Só pode|Só os participantes|Escreva|Entre na sua conta|Conversa|Anúncio não encontrado|já/.test(m)) return m;
     if (/check constraint/i.test(m)) return 'Há um valor inválido. Verifique os campos.';
     return 'Ocorreu um erro. Tente novamente.';
   }
 
   window.PNC = {
     APP_VERSAO, DEFAULT_LOC, openNow, nextOpening, availability, scheduleOf, ratingOf, fmtRating, stars, estimate,
-    CAR_CATEGORIES, CAR_LABELS, SEATS, MODES, matchAll, fitsSchedule, BOOKING_STATUS, bookingState, fmtDT, fmtRange, icon, LOGO, renderChrome, db, photoUrl, BUCKET, currentUser, requireLogin, isAdmin, displayName,
+    CAR_CATEGORIES, CAR_LABELS, SEATS, MODES, matchAll, fitsSchedule, BOOKING_STATUS, bookingState, fmtDT, fmtRange, icon, LOGO, renderChrome, db, photoUrl, BUCKET, currentUser, requireLogin, openConversation, unreadBadge, testMode, testSwitchHTML, bindTestSwitch, entrarComo, voltarConta, isAdmin, displayName,
     CATEGORIES, VEHICLES, SPOT_TYPES, ZONES, CHARGERS, WEEKDAYS, STATUS,
     euro, mainPrice, esc, distance, walkText, toast, greeting, authError, dbError, SITE_ID: 'parkncharge',
   };

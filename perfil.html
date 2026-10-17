@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=0.4">
+  <link rel="stylesheet" href="assets/style.css?v=0.5">
 </head>
 <body>
   <div class="page-top"><div class="wrap page"><h1 id="title">Perfil</h1></div></div>
@@ -18,7 +18,7 @@
     <div class="page" id="content"><div class="spinner"></div></div>
   </main>
 
-  <script src="assets/app.js?v=0.4"></script>
+  <script src="assets/app.js?v=0.5"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
   <script>
@@ -58,10 +58,12 @@
                  : item('/reservas.html', 'bookings', 'As minhas reservas') + item('/favoritos.html', 'heart', 'Favoritos')}
           ${admin ? item('/admin.html', 'shield', 'Aprovação de anúncios') : ''}
           ${item('/ajuda.html', 'help', 'Centro de ajuda')}
-          <li><button id="logout" type="button">${I('logout')}<span>Terminar sessão</span></button></li>
+          ${PNC.testMode() ? '' : `<li><button id="logout" type="button">${I('logout')}<span>Terminar sessão</span></button></li>`}
         </ul>
+        ${PNC.testSwitchHTML(admin)}
         <p class="muted" style="font-size:13px;margin-top:20px">Nome e fotografia são os da sua conta frisk.pt. · Parkncharge ${PNC.APP_VERSAO}</p>`;
-      $('logout').onclick = async () => { await Auth.signOut(); location.replace('/'); };
+      if ($('logout')) $('logout').onclick = async () => { await Auth.signOut(); location.replace('/'); };
+      PNC.bindTestSwitch($('content'));
     })();
   </script>
 </body>

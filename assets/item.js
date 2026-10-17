@@ -39,7 +39,7 @@
       if (l.max_height_m) out.push(fact('under', `Altura máxima ${String(l.max_height_m).replace('.', ',')} m`, ''));
       out.push(fact('car', 'Veículos aceites', (l.vehicle_types || []).map(v => (PNC.VEHICLES.find(x => x[0] === v) || [, v])[1]).join(', ')));
     }
-    out.push(fact(l.instant_book ? 'bolt' : 'check', l.instant_book ? 'Reserva instantânea' : 'O anfitrião aprova cada pedido', ''));
+    out.push(fact('bolt', 'Reserva instantânea', ''));
     return `<ul class="facts">${out.join('')}</ul>`;
   }
 
@@ -163,9 +163,10 @@
           ${CAR ? '' : '<input class="input" id="bveh" maxlength="80" placeholder="Matrícula ou modelo (ex.: Renault Clio)">'}
           <textarea class="input" id="bmsg" maxlength="500" placeholder="${CAR ? 'Ex.: para que precisa do carro, hora de chegada…' : 'Ex.: hora de chegada, dúvidas sobre o acesso…'}"></textarea>
         </details>`}
-        <button class="btn block orange" type="button" id="bgo" ${own ? 'disabled' : ''}>${own ? 'É o seu anúncio' : l.instant_book ? 'Reservar' : 'Pedir reserva'}</button>
-        <p class="hint center">${l.instant_book ? 'Reserva instantânea: fica confirmada de imediato.' : 'O anfitrião tem até 24 h (ou até ao início) para aceitar o pedido.'} O pagamento é combinado com o anfitrião.</p>
+        <button class="btn block orange" type="button" id="bgo" ${own ? 'disabled' : ''}>${own ? 'É o seu anúncio' : 'Reservar'}</button>
+        <p class="hint center">Reserva instantânea: fica confirmada de imediato. O pagamento é combinado com o anfitrião.</p>
       </div>
+      ${own ? '' : `<button class="btn block ghost book-contact" type="button" id="bcontact">${I('chat')} Contactar o anfitrião</button>`}
       ${busy.length ? `<div class="busy"><b>Já reservado</b><ul>${busy.slice(0, 6).map(p => `<li>${esc(PNC.fmtRange(p.starts_at, p.ends_at))}${p.pending ? ' <span class="muted">(pedido)</span>' : ''}</li>`).join('')}</ul>${busy.length > 6 ? `<small class="muted">e mais ${busy.length - 6}</small>` : ''}</div>` : ''}
     </aside>`;
   }
@@ -204,11 +205,17 @@
     const { data, error } = await PNC.db().from('bookings').insert(row).select('id,status,total_price,price_label,expires_at,starts_at,ends_at').single();
     if (error) {
       PNC.toast(PNC.dbError(error), 'err');
-      go.textContent = L0.instant_book ? 'Reservar' : 'Pedir reserva';
+      go.textContent = 'Reservar';
       await loadBusy(); updateEstimate();
       return;
     }
     const ok = data.status === 'confirmada';
+    if (msg) {   // a mensagem da reserva também fica na conversa com o anfitrião
+      try {
+        const { data: cid } = await PNC.db().rpc('open_conversation', CAR ? { p_listing: null, p_car: id } : { p_listing: id, p_car: null });
+        if (cid) await PNC.db().from('messages').insert({ conversation_id: cid, body: msg });
+      } catch (e) { }
+    }
     $('bform').innerHTML = `<div class="book-done">
       <div class="book-done-ico ${ok ? 'ok' : ''}">${I(ok ? 'check' : 'today')}</div>
       <h3>${ok ? 'Reserva confirmada' : 'Pedido enviado'}</h3>
@@ -260,6 +267,7 @@
     ['bstart', 'bend'].forEach(x => $(x).addEventListener('change', updateEstimate));
     updateEstimate();
     if ($('bgo')) $('bgo').onclick = submitBooking;
+    if ($('bcontact')) $('bcontact').onclick = () => PNC.openConversation(CAR ? { car: id } : { listing: id }, $('bcontact'));
     wireReviewForm();
     if (window.L && L0.approx_lat != null) {
       const m = L.map('imap', { scrollWheelZoom: false }).setView([L0.approx_lat, L0.approx_lng], 15);

@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=0.4">
+  <link rel="stylesheet" href="assets/style.css?v=0.5">
 </head>
 <body>
   <div class="page-top"><div class="wrap page"><h1 id="title">Os meus lugares</h1></div></div>
@@ -18,7 +18,7 @@
     <div class="page" id="content"><div class="spinner"></div></div>
   </main>
 
-  <script src="assets/app.js?v=0.4"></script>
+  <script src="assets/app.js?v=0.5"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
   <script>
@@ -142,7 +142,6 @@
       const it = b.listings || b.cars || {}, car = !!b.car_id;
       const st = PNC.bookingState(b), [label, cls] = PNC.BOOKING_STATUS[st];
       const href = it.id ? `${car ? '/carro.html' : '/lugar.html'}?id=${it.id}` : '';
-      const pending = st === 'pedido';
       const canCancel = b.status === 'confirmada' && new Date(b.ends_at) > new Date();
       return `<article class="bk host">
         <div class="bk-body">
@@ -151,9 +150,8 @@
           <div class="bk-when">${PNC.icon('calendar')} ${esc(PNC.fmtRange(b.starts_at, b.ends_at))}</div>
           <div class="muted">${b.vehicle_note ? esc(b.vehicle_note) + ' · ' : ''}<b>${PNC.euro(b.total_price)}</b></div>
           ${b.message ? `<div class="bk-note">“${esc(b.message)}”</div>` : ''}
-          ${pending ? `<div class="bk-note">Responda até ${esc(PNC.fmtDT(b.expires_at))}; depois o pedido expira.</div>` : ''}
           <div class="actions">
-            ${pending ? `<button class="btn small" data-hact="accept" data-id="${b.id}">${PNC.icon('check')} Aceitar</button><button class="btn small ghost" data-hact="refuse" data-id="${b.id}">Recusar</button>` : ''}
+            ${b.driver_id && b.driver_id !== user.id ? `<button class="btn small ghost" data-hact="msg" data-id="${b.id}">${PNC.icon('chat')} Mensagem</button>` : ''}
             ${canCancel ? `<button class="btn small danger" data-hact="cancel" data-id="${b.id}">Cancelar</button>` : ''}
           </div>
         </div>
@@ -163,7 +161,6 @@
       if (!(await loadHostBookings())) return;
       const now = new Date(), d0 = new Date(); d0.setHours(0, 0, 0, 0);
       const d1 = new Date(d0); d1.setDate(d1.getDate() + 1);
-      const pending = hb.filter(b => PNC.bookingState(b) === 'pedido');
       const live = hb.filter(b => b.status === 'confirmada');
       if (v === 'hoje') {
         const arr = live.filter(b => new Date(b.starts_at) >= d0 && new Date(b.starts_at) < d1);
@@ -171,15 +168,14 @@
         const ongoing = live.filter(b => new Date(b.starts_at) < d0 && new Date(b.ends_at) >= d1);
         const sec = (title, list, extra) => list.length ? `<section class="section"><h2>${title} <span class="muted">(${list.length})</span></h2><div class="bk-list">${list.map(b => hbCard(b, extra ? extra(b) : '')).join('')}</div></section>` : '';
         const t = x => `<span class="muted bk-kind">${new Date(x).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>`;
-        const html = sec('Pedidos por responder', pending)
-          + sec('Chegadas hoje', arr, b => t(b.starts_at))
+        const html = sec('Chegadas hoje', arr, b => t(b.starts_at))
           + sec('Saídas hoje', dep, b => t(b.ends_at))
           + sec('A decorrer', ongoing);
-        c.innerHTML = html || `<div class="empty-card"><strong>Nada para hoje</strong>Não há pedidos nem chegadas ou saídas hoje. <a href="/anfitriao.html?v=calendario">Ver o calendário</a></div>`;
+        c.innerHTML = html || `<div class="empty-card"><strong>Nada para hoje</strong>Não há chegadas nem saídas hoje. <a href="/anfitriao.html?v=calendario">Ver o calendário</a></div>`;
       } else {
         const days = [];
         for (let i = 0; i < 30; i++) { const d = new Date(d0); d.setDate(d.getDate() + i); days.push(d); }
-        const active = hb.filter(b => ['pedido', 'confirmada', 'decorrer'].includes(PNC.bookingState(b)));
+        const active = hb.filter(b => ['confirmada', 'decorrer'].includes(PNC.bookingState(b)));
         const html = days.map(d => {
           const e = new Date(d); e.setDate(e.getDate() + 1);
           const list = active.filter(b => new Date(b.starts_at) < e && new Date(b.ends_at) > d);
@@ -187,19 +183,18 @@
           const title = d.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
           return `<section class="section cal-day"><h2>${title.charAt(0).toUpperCase() + title.slice(1)}</h2><div class="bk-list">${list.map(b => hbCard(b)).join('')}</div></section>`;
         }).join('');
-        c.innerHTML = `<p class="muted">Próximos 30 dias · pedidos e reservas confirmadas.</p>` + (html || `<div class="empty-card"><strong>Sem reservas nos próximos 30 dias</strong>Quando alguém reservar um dos seus lugares, aparece aqui.</div>`);
+        c.innerHTML = `<p class="muted">Próximos 30 dias · reservas confirmadas.</p>` + (html || `<div class="empty-card"><strong>Sem reservas nos próximos 30 dias</strong>Quando alguém reservar um dos seus lugares, aparece aqui.</div>`);
       }
       c.onclick = async e => {
         const btn = e.target.closest('[data-hact]'); if (!btn) return;
         const id = btn.dataset.id, act = btn.dataset.hact;
+        if (act === 'msg') { const b = hb.find(x => x.id === id); return PNC.openConversation(b.car_id ? { car: b.car_id, guest: b.driver_id } : { listing: b.listing_id, guest: b.driver_id }, btn); }
         let patch;
-        if (act === 'accept') patch = { status: 'confirmada' };
-        if (act === 'refuse') { const r = prompt('Motivo da recusa (opcional, o condutor vê):'); if (r === null) return; patch = { status: 'recusada', cancel_reason: r.trim() || null }; }
         if (act === 'cancel') { const r = prompt('Motivo do cancelamento (obrigatório, o condutor vê):'); if (!r || !r.trim()) return; patch = { status: 'cancelada', cancel_reason: r.trim() }; }
         btn.disabled = true;
         const { error } = await db.from('bookings').update(patch).eq('id', id);
         if (error) { btn.disabled = false; return PNC.toast(PNC.dbError(error), 'err'); }
-        PNC.toast({ confirmada: 'Pedido aceite. O condutor já vê a morada e as instruções.', recusada: 'Pedido recusado.', cancelada: 'Reserva cancelada.' }[patch.status]);
+        PNC.toast('Reserva cancelada.');
         hostBookings(v);
       };
     }

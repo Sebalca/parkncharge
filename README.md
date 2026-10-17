@@ -43,7 +43,7 @@ publicar.html       assistente de publicação/edição de um lugar (9 passos)
 admin.html          aprovação de anúncios (só administradores)
 favoritos.html      em breve (v0.6)
 reservas.html       reservas do condutor (Próximas, Anteriores, Canceladas)
-mensagens.html      em breve (v0.5)
+mensagens.html      conversas condutor ↔ anfitrião (lista e conversa)
 ajuda.html          centro de ajuda (âncoras #sobre, #anfitrioes, #carregadores, #cancelamentos, #seguranca)
 termos.html         termos (em preparação, v0.8)
 privacidade.html    privacidade / RGPD (em preparação, v0.8)
@@ -79,6 +79,8 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
 | `estimate(anúncio, início, fim)` | Preço: a combinação mais barata de horas, dias (com horas a mais) e meses. É o mesmo cálculo que o servidor faz em `booking_price`. |
 | `fitsSchedule(horário, início, fim, carro)` | Verifica se o período cabe no horário, com as mesmas regras do servidor: lugar = período inteiro; carro = levantar e entregar; 30 dias ou mais = sem limite. |
 | `bookingState(reserva)`, `BOOKING_STATUS`, `fmtRange()`, `fmtDT()` | Estado mostrado de uma reserva (incluindo "a decorrer" e "concluída", que vêm das datas), nomes e cores, e datas em português. |
+| `openConversation({listing\|car, guest?})`, `unreadBadge()` | Abre (ou cria) a conversa sobre um anúncio e vai para `mensagens.html?c=…`; número de conversas por ler na barra. |
+| `testSwitchHTML()`, `bindTestSwitch()`, `entrarComo()`, `voltarConta()`, `testMode()` | "Experimentar como" (só admin): entrar numa conta de teste e voltar à própria. |
 | `DEFAULT_LOC` | Localização por defeito (fictícia): São Mamede de Infesta. |
 | `openNow()`, `nextOpening()`, `availability(l)` | Estado de um lugar agora: `disponivel`, `ocupada` (simulada, `demo_occupied`) ou `fechada` (fora do horário, com a próxima abertura). |
 | `db()` | Cliente Supabase já apontado para o schema `parkncharge` (`plataforma.schema('parkncharge')`). |
@@ -153,21 +155,27 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
   - início e fim (ou levantar e entregar), já preenchidos com o primeiro período livre dentro do horário;
   - avisos se o período ficar fora do horário, sobreposto ou no passado; total calculado;
   - opcional: veículo (matrícula/modelo, só nos lugares) e mensagem ao anfitrião;
-  - botão **Reservar** (reserva instantânea) ou **Pedir reserva** (com aprovação). Sem sessão leva ao login. O dono vê "É o seu anúncio".
-  - No fim, a confirmação: "Reserva confirmada" (a morada já está na reserva) ou "Pedido enviado" (com o prazo do anfitrião).
+  - botão **Reservar**: todas as reservas são instantâneas (desde a v0.4a). Sem sessão leva ao login. O dono vê "É o seu anúncio".
+  - No fim, a confirmação "Reserva confirmada" (a morada já está na reserva). A mensagem escrita ao reservar também vai para a conversa com o anfitrião.
   - Lista dos períodos **já reservados** (função `busy_periods`, sem dizer de quem).
+  - **Contactar o anfitrião:** abre (ou cria) a conversa sobre este anúncio, para perguntar antes de reservar.
 
 ### Reservas — condutor (`reservas.html`)
-- Separadores **Próximas** (pedidos, confirmadas, a decorrer), **Anteriores** (concluídas) e **Canceladas** (recusadas, canceladas, expiradas).
-- Cada reserva mostra foto, estado, selo "Exemplo", título (link para o anúncio), datas, zona, total e uma nota:
-  - "aguarda resposta até…" num pedido;
-  - o motivo de uma recusa ou de um cancelamento feito pelo anfitrião;
-  - "o anfitrião não respondeu a tempo" num pedido expirado.
+- Separadores **Próximas** (confirmadas, a decorrer), **Anteriores** (concluídas) e **Canceladas** (canceladas; e recusadas/expiradas antigas, de antes da v0.4a).
+- Cada reserva mostra foto, estado, selo "Exemplo", título (link para o anúncio), datas, zona, total e uma nota (por exemplo, o motivo de um cancelamento feito pelo anfitrião).
 - **Ações:**
   - **Morada e acesso** / **Local de recolha** (confirmada, até ao fim): função `booking_access` → morada, código postal, matrícula (carros), instruções e link para o mapa.
   - **Avaliar** quando concluída.
-  - **Cancelar** um pedido, ou uma confirmada antes do início.
-- Ao abrir, a página chama `expire_requests` para fechar pedidos vencidos.
+  - **Mensagem:** abre a conversa com o anfitrião desse anúncio.
+  - **Cancelar** uma confirmada antes do início.
+
+### Mensagens (`mensagens.html`) — v0.5
+- **Uma conversa por anúncio e por condutor** (como no Airbnb). Começa com "Contactar o anfitrião" na página do anúncio, ou com **Mensagem** nas Reservas (condutor) e no Hoje/Calendário (anfitrião). O anfitrião só pode começar conversa com quem reservou.
+- **Lista:** separadores **Como condutor / Como anfitrião** (com o número por ler), cada conversa com a foto do anúncio, o nome da outra pessoa, o anúncio, a última mensagem, a hora e um ponto laranja se estiver por ler.
+- **Conversa** (`?c=<id>`): cabeçalho com a pessoa e o anúncio; as reservas desse condutor nesse anúncio (ou "Reservar"); mensagens agrupadas por dia; campo para escrever (Enter envia, Shift+Enter muda de linha). Atualiza a cada 8 s e marca como lida.
+- **Telefones e emails ficam escondidos (•••)** até haver uma reserva confirmada entre os dois nesse anúncio. É feito no servidor, ao gravar; a mensagem fica marcada e aparece um aviso.
+- A barra inferior mostra o número de conversas por ler em **Mensagens**.
+- Sem emails de aviso por agora.
 
 ### Menu da conta (janela do canto superior direito)
 - O botão ☰ + avatar abre uma **janela**, não uma página, em todas as páginas (também no telemóvel).
@@ -177,6 +185,11 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
   - Mudar para anfitrião/condutor;
   - atalhos: Reservas/Favoritos/Mensagens ou Os meus lugares/Publicar/Dados de anfitrião;
   - Aprovação de anúncios (admin), Perfil, Centro de ajuda, Terminar sessão.
+  - **Experimentar como** (só admin, v0.4a): entra na conta **Condutor Teste** ou **Anfitrião Teste**. Aparece uma faixa laranja no topo com **Voltar à minha conta** (que substitui "Terminar sessão" enquanto está numa conta de teste).
+    - A troca é feita pela Edge Function `parkncharge-entrar-como` (Supabase), que confirma que quem pede é admin e só entra nessas duas contas; devolve um código de entrada único (não envia email). A chave de serviço fica só no Supabase.
+    - Para voltar, o site guarda no browser (localStorage) o token de renovação da sessão do admin.
+    - Na primeira entrada, o Anfitrião Teste fica dono de metade dos exemplos (lugares, carros e as reservas deles), para se ver o Hoje e o Calendário do outro lado.
+    - A sessão é partilhada por todos os sites frisk.pt: enquanto está numa conta de teste, os outros sites também a veem.
 - A versão aparece no canto da janela.
 - Fecha ao clicar fora ou com Esc, mas não quando se carrega dentro e se larga fora. O avatar (ou a inicial) aparece no botão quando há sessão.
 
@@ -189,7 +202,7 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
 - **Perfil:** cartão com nome, email e avatar, e o botão **Mudar para anfitrião / condutor**. O menu tem:
   - como condutor: reservas e favoritos;
   - como anfitrião: os meus lugares, dados de anfitrião e publicar;
-  - para administradores: "Aprovação de anúncios";
+  - para administradores: "Aprovação de anúncios" e "Experimentar como";
   - ajuda e terminar sessão.
 
 ### Modo anfitrião (`anfitriao.html`)
@@ -205,9 +218,9 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
   | Recusado | com o motivo à vista | Corrigir e reenviar, Apagar |
   | Pausado | escondido pelo anfitrião | Reativar, Editar |
 
-- **Hoje** (`?v=hoje`): pedidos por responder (**Aceitar** / **Recusar**, com o prazo), chegadas e saídas do dia (com a hora) e reservas a decorrer.
-- **Calendário** (`?v=calendario`): agenda dos próximos 30 dias, dia a dia, com pedidos e reservas confirmadas.
-- Cada reserva mostra o primeiro nome do condutor, o anúncio, as datas, o veículo, o total e a mensagem. Pode **cancelar** uma confirmada, com motivo obrigatório.
+- **Hoje** (`?v=hoje`): chegadas e saídas do dia (com a hora) e reservas a decorrer.
+- **Calendário** (`?v=calendario`): agenda dos próximos 30 dias, dia a dia, com as reservas confirmadas.
+- Cada reserva mostra o primeiro nome do condutor, o anúncio, as datas, o veículo, o total e a mensagem. Botões **Mensagem** (conversa com o condutor) e **Cancelar** (confirmada, com motivo obrigatório). Não há pedidos para aprovar: as reservas são instantâneas.
 
 ### Publicar um lugar (`publicar.html`)
 Assistente em 9 passos, com barra de progresso. **Cada passo é guardado ao carregar em "Seguinte"**, por isso um rascunho pode ser continuado mais tarde (`?id=…`).
@@ -224,7 +237,7 @@ Assistente em 9 passos, com barra de progresso. **Cada passo é guardado ao carr
    - Pode-se apagar e escolher a capa (★).
 6. **Título** (sugerido a partir do tipo, zona e carregador) e descrição.
 7. **Horário semanal:** dia a dia, com as opções "24 h" e os atalhos "24 h, todos os dias" e "Dias úteis 8h–20h".
-8. **Preços:** hora, dia e/ou mês (pelo menos um). Escolher entre **reserva instantânea** e **aprovo cada pedido**.
+8. **Preços:** hora, dia e/ou mês (pelo menos um). As reservas são sempre instantâneas (v0.4a).
 9. **Rever** tudo, acrescentar as **instruções de acesso** (privadas) e **Enviar para aprovação**. Num anúncio ativo, o botão é "Guardar alterações".
 
 ### Aprovação (`admin.html`) — só administradores
@@ -275,10 +288,11 @@ Descrição completa das colunas e das próximas tabelas (reservas, mensagens, f
   - Desde a v0.4 exige uma reserva confirmada já terminada desse anúncio.
 - **`bookings_guard`** (reservas):
   - **ao criar:** o condutor é quem tem a sessão; o anúncio tem de estar ativo e não pode ser o próprio; o início tem de ser no futuro; dura de 30 min a 1 ano; tem de cumprir `fits_schedule`.
-  - O **preço** (`booking_price`) e o **estado** são decididos aqui: instantânea → confirmada; com aprovação → pedido, com `expires_at` = 24 h ou o início.
-  - Pedidos vencidos desse anúncio passam a expirados (deixam de bloquear).
-  - **ao alterar:** os dados da reserva nunca mudam; só o estado, pelas regras D71–D72 (anfitrião aceita/recusa um pedido no prazo e cancela uma confirmada com motivo; condutor cancela um pedido ou uma confirmada antes do início; o admin pode tudo).
-  - As restrições de exclusão (`btree_gist`) impedem dois pedidos/confirmadas sobrepostos no mesmo lugar ou carro.
+  - O **preço** (`booking_price`) e o **estado** são decididos aqui: desde a v0.4a, sempre **confirmada**.
+  - **ao alterar:** os dados da reserva nunca mudam; só o estado, pelas regras D72 (anfitrião cancela uma confirmada com motivo; condutor cancela antes do início; o admin pode tudo).
+  - As restrições de exclusão (`btree_gist`) impedem duas reservas sobrepostas no mesmo lugar ou carro.
+- **`messages_guard`** (mensagens, v0.5): só os dois participantes escrevem, em nome próprio; texto de 1 a 2000 caracteres; sem reserva confirmada entre os dois, `mask_contacts` troca emails e números com 9+ algarismos por •••; atualiza a última mensagem e o "lido" de quem escreveu.
+- **`setup_test_account`** (v0.4a): só com a chave de serviço (Edge Function); regista a conta de teste e, na primeira vez, passa metade dos exemplos para o Anfitrião Teste.
 - As funções dos triggers não estão expostas na API (migração `v04c`).
 
 ### Segurança (RLS)
@@ -292,6 +306,9 @@ Descrição completa das colunas e das próximas tabelas (reservas, mensagens, f
 | `car_private` | só o dono e o admin | só o dono |
 | `reviews` | todos | o autor com reserva concluída (inserir, editar, apagar); o admin pode apagar |
 | `bookings` | o condutor, o anfitrião dessa reserva e o admin; anónimos só os períodos ocupados (`busy_periods`) e os ocupados agora (`occupied_now`) | criar: qualquer conta (como condutor); alterar o estado: condutor/anfitrião pelas regras; ninguém apaga |
+| `conversations` | só o condutor e o anfitrião da conversa (e o admin) | ninguém diretamente: cria-se pela função `open_conversation` |
+| `messages` | só os dois participantes (e o admin) | os dois participantes, em nome próprio; ninguém edita nem apaga |
+| `test_accounts` | só o admin | ninguém (só a Edge Function, com a chave de serviço) |
 | morada exata / instruções | só pela função `booking_access`: o condutor de uma reserva confirmada até ao fim, o anfitrião e o admin | — |
 | Storage `parkncharge` | leitura pública (fotos dos anúncios) | só na pasta `{user_id}/` do próprio; máx. 5 MB; JPEG, PNG ou WebP |
 
@@ -347,15 +364,15 @@ Servir a pasta (`python3 -m http.server` ou `npx serve .`) e abrir `http://local
 - **12 garagens fictícias:** 7 em São Mamede de Infesta e 5 em Senhora da Hora, Custóias, Paranhos, Leça do Balio e Matosinhos. 2 estão ocupadas e 1 só abre em dias úteis.
 - **10 carros fictícios:** 6 em São Mamede de Infesta e 4 em Senhora da Hora, Paranhos, Custóias e Matosinhos. Há elétricos, híbrido, 7 lugares, carrinha e GPL; 1 está alugado e 2 só existem em dias úteis.
 - **65 avaliações de exemplo** (2 a 4 por anúncio), com nomes inventados.
-- **10 reservas de exemplo** com condutores inventados: 3 a decorrer (por isso há anúncios Ocupado/Alugado), 3 futuras, 2 pedidos por responder (aparecem no Hoje do administrador) e 2 concluídas.
-- Tudo na conta do administrador, com `is_demo = true`, o selo "Exemplo", ilustrações em `assets/demo/` e moradas sem número de porta.
+- **10 reservas de exemplo** com condutores inventados: 3 a decorrer (por isso há anúncios Ocupado/Alugado), 5 futuras (2 eram pedidos e passaram a confirmadas na v0.4a) e 2 concluídas.
+- Tudo na conta do administrador (depois do primeiro "Experimentar como Anfitrião Teste", metade passa para essa conta), com `is_demo = true`, o selo "Exemplo", ilustrações em `assets/demo/` e moradas sem número de porta.
 - **Recriar:** correr no editor SQL do Supabase, por esta ordem: `supabase/seed/exemplos_sao_mamede.sql`, `exemplos_carros_avaliacoes.sql` e `exemplos_reservas.sql` (as datas são relativas ao momento em que se corre).
-- **Apagar tudo** (antes da beta, v0.8): `delete from parkncharge.bookings where is_demo; delete from parkncharge.reviews where is_demo; delete from parkncharge.listings where is_demo; delete from parkncharge.cars where is_demo;`
+- **Apagar tudo** (antes da beta, v0.8): `delete from parkncharge.conversations where host_id in (select user_id from parkncharge.test_accounts) or guest_id in (select user_id from parkncharge.test_accounts); delete from parkncharge.bookings where is_demo; delete from parkncharge.reviews where is_demo; delete from parkncharge.listings where is_demo; delete from parkncharge.cars where is_demo;`
 
-### Limitações conhecidas (v0.4)
-- Favoritos e Mensagens são páginas "em breve" (v0.6 e v0.5). Ainda não há emails de aviso: o anfitrião vê os pedidos no Hoje.
+### Limitações conhecidas (v0.5)
+- Favoritos é uma página "em breve" (v0.6). Não há emails de aviso (reservas ou mensagens novas): vê-se no site (número por ler na barra).
+- As mensagens atualizam a cada 8 s (sem tempo real) e não aceitam fotos.
 - O pagamento é combinado entre as partes (Stripe na v1.1).
-- Os pedidos vencidos passam a "expirada" quando alguém abre as reservas ou faz uma nova reserva desse anúncio (não há tarefa agendada). Até lá aparecem como expirados no site, mas o período só fica livre nesse momento.
 - Os carros ainda não se publicam pelo modo anfitrião (só existem os de exemplo); a aprovação em `admin.html` é só de lugares.
 - As datas da pesquisa ainda não filtram o Explorar (a página do anúncio já verifica o horário e as reservas).
 - A localização arranca fixa em São Mamede de Infesta até se usar o GPS.

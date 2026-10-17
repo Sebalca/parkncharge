@@ -40,7 +40,21 @@ const CSS = ler('assets/style.css');
   t('D04', 'cores do Figma no design system', ['#436E91', '#F3E9B5', '#E95322'].every(c => CSS.includes(c)) && /Josefin Sans/.test(CSS) && /Lato/.test(CSS));
   t('D10', 'sem pagamentos na plataforma antes da v1.1 (sem Stripe)', !/stripe/i.test(CODIGO));
   t('D11', 'dados no schema próprio "parkncharge"', /create schema if not exists parkncharge/.test(SQL) && /schema\('parkncharge'\)/.test(ler('assets/app.js')));
-  t('S01', 'nenhuma chave privada no código', !/service_role|sb_secret_|SUPABASE_SERVICE/i.test(CODIGO + SQL));
+  const EDGE = ler('supabase/functions/parkncharge-entrar-como/index.ts');
+  t('S01', 'nenhuma chave privada no código (a Edge Function lê a chave do ambiente)', !/service_role|sb_secret_|SUPABASE_SERVICE/i.test(CODIGO) && !/sb_secret_|eyJhbGciOi/.test(SQL + EDGE)
+    && /Deno\.env\.get\("SUPABASE_SERVICE_ROLE_KEY"\)/.test(EDGE));
+  t('D77', 'Entrar como: só administradores e só as duas contas de teste (servidor)', /if \(!prof\?\.is_admin\) return json\(req, 403/.test(EDGE) && (EDGE.match(/@parkncharge\.frisk\.pt/g) || []).length === 2
+    && /revoke execute on function parkncharge\.setup_test_account\(uuid, text\) from public, anon, authenticated/.test(SQL) && /Voltar à minha conta/.test(ler('assets/app.js')));
+
+  console.log('Mensagens');
+  t('D80', 'uma conversa por anúncio e condutor; abre-se no anúncio (Contactar o anfitrião), nas reservas e no Hoje/Calendário',
+    /conversations_um_por_lugar/.test(SQL) && /conversations_um_por_carro/.test(SQL) && /open_conversation/.test(SQL)
+    && /Contactar o anfitrião/.test(ler('assets/item.js')) && /data-act="msg"/.test(ler('reservas.html')) && /data-hact="msg"/.test(ler('anfitriao.html')) && /openConversation/.test(ler('assets/app.js')));
+  t('D81', 'telefones e emails escondidos no servidor até haver reserva confirmada',
+    /if not parkncharge\.conversation_has_booking\(c\.id\) then\s+clean := parkncharge\.mask_contacts\(new\.body\)/.test(SQL) && /b\.status = 'confirmada'/.test(SQL.split('conversation_has_booking')[1] || ''));
+  t('D82', 'mensagens: só os participantes leem e escrevem; ninguém edita nem apaga; o anfitrião só escreve a quem reservou',
+    /create policy messages_participantes/.test(SQL) && /create policy messages_escrever/.test(SQL) && !/on parkncharge\.messages for (update|delete|all)/.test(SQL)
+    && /grant select, insert on parkncharge\.messages to authenticated/.test(SQL) && /Só pode escrever a condutores que reservaram este anúncio/.test(SQL));
 
   console.log('Explorar');
   await p.goto(U + '/'); await p.waitForTimeout(400);
@@ -119,7 +133,9 @@ const CSS = ler('assets/style.css');
   console.log('Reservas');
   t('D70', 'reservas de lugares e carros na mesma tabela, sem sobreposições (servidor)', /create table parkncharge\.bookings/.test(SQL) && /bookings_sem_sobreposicao_lugar/.test(SQL) && /bookings_sem_sobreposicao_carro/.test(SQL) && /check \(\(listing_id is null\) <> \(car_id is null\)\)/.test(SQL));
   t('D70', 'preço e estado decididos no servidor (o browser não os escolhe)', /select bp\.total, bp\.label into new\.total_price, new\.price_label/.test(SQL) && /new\.status := 'confirmada'; new\.decided_at := now\(\)/.test(SQL));
-  t('D71', 'pedido expira em 24 h ou no início (o que vier primeiro)', /new\.expires_at := least\(now\(\) \+ interval '24 hours', new\.starts_at\)/.test(SQL) && /expire_requests/.test(SQL));
+  const GUARD = SQL.split('create or replace function parkncharge.bookings_guard()').pop().split('$$;')[0];
+  t('D71', 'reservas sempre instantâneas: o servidor confirma logo e não há aceitar/recusar', /new\.status := 'confirmada'; new\.decided_at := now\(\); new\.expires_at := null;/.test(GUARD) && !/'pedido'|'recusada'|instant_book/.test(GUARD)
+    && !/Pedir reserva|aprova cada pedido/i.test(ler('assets/item.js')) && !/Aceitar|Recusar|Pedidos por responder/.test(ler('anfitriao.html')));
   t('D72', 'cancelar: condutor até ao início; anfitrião com motivo', /A reserva já começou e não pode ser cancelada/.test(SQL) && /Indique o motivo do cancelamento/.test(SQL));
   t('D73', 'horário: lugares período inteiro, carros levantar/entregar, 30 dias ou mais ignoram (cliente = servidor)', await ev(() => {
     const h = (o, c, days = [0, 1, 2, 3, 4, 5, 6]) => days.map(w => ({ weekday: w, opens_at: o, closes_at: c }));
@@ -132,8 +148,8 @@ const CSS = ler('assets/style.css');
   }) && /fits_schedule/.test(SQL) && /interval '30 days'/.test(SQL));
   t('D62', 'avaliações só depois de uma reserva concluída (servidor + página)', /Só quem fez uma reserva concluída pode avaliar/.test(SQL) && /canReview/.test(ler('assets/item.js')));
   t('D74', 'morada e instruções só para o condutor de reserva confirmada, até ao fim', /b\.status = 'confirmada' and now\(\) < b\.ends_at/.test(SQL) && /booking_access/.test(ler('reservas.html')) && !/listing_private|car_private/.test(ler('reservas.html')));
-  t('D75', 'gestão: Reservas (condutor) e Hoje/Calendário com aceitar/recusar (anfitrião)', ['Próximas', 'Anteriores', 'Canceladas', 'Cancelar'].every(x => ler('reservas.html').includes(x))
-    && ['Pedidos por responder', 'Chegadas hoje', 'Saídas hoje', 'Aceitar', 'Recusar', 'Próximos 30 dias'].every(x => ler('anfitriao.html').includes(x)));
+  t('D75', 'gestão: Reservas (condutor) e Hoje/Calendário (anfitrião)', ['Próximas', 'Anteriores', 'Canceladas', 'Cancelar'].every(x => ler('reservas.html').includes(x))
+    && ['Chegadas hoje', 'Saídas hoje', 'A decorrer', 'Próximos 30 dias', 'Motivo do cancelamento'].every(x => ler('anfitriao.html').includes(x)));
   t('D76', 'estado mostrado: a decorrer / concluída vêm das datas', await ev(() => {
     const n = new Date(), m = x => new Date(n.getTime() + x * 36e5).toISOString();
     return PNC.bookingState({ status: 'confirmada', starts_at: m(-2), ends_at: m(2) }) === 'decorrer' && PNC.bookingState({ status: 'confirmada', starts_at: m(-5), ends_at: m(-1) }) === 'concluida'
@@ -171,7 +187,7 @@ const CSS = ler('assets/style.css');
     && !/listing_private/.test(ler('index.html')));
   t('D35', 'sem serviços Clean Up / Workshop antes da v1.0', !/clean ?up|workshop|lavagem|oficina/i.test(CODIGO.replace(/<footer[\s\S]*?<\/footer>/g, '')));
   t('D36', 'recusa sempre com motivo visível ao anfitrião', /Motivo \(o anfitrião vai ver/.test(ler('admin.html')) && /if \(!reason \|\| !reason\.trim\(\)\) return/.test(ler('admin.html')) && /rejection_reason/.test(ler('anfitriao.html')));
-  t('D09', 'preços à hora, ao dia e ao mês + reserva instantânea ou com aprovação', ['id="ph"', 'id="pd"', 'id="pm"', 'id="book"', 'Reserva instantânea', 'Aprovo cada pedido'].every(x => ler('publicar.html').includes(x)));
+  t('D09', 'preços à hora, ao dia e ao mês; reservas sempre instantâneas (sem escolha no assistente)', ['id="ph"', 'id="pd"', 'id="pm"', 'reservas são instantâneas'].every(x => ler('publicar.html').includes(x)) && !/Aprovo cada pedido|id="book"/.test(ler('publicar.html')));
 
   console.log('Páginas');
   for (const f of PAGINAS) { await p.goto(`${U}/${f}`); await p.waitForTimeout(150); }

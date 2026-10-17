@@ -10,26 +10,143 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=0.4">
+  <link rel="stylesheet" href="assets/style.css?v=0.5">
 </head>
 <body>
-  <div class="page-top"><div class="wrap page"><h1>Mensagens</h1></div></div>
+  <div class="page-top"><div class="wrap page"><h1 id="title">Mensagens</h1></div></div>
   <main class="sheet"><div class="page" id="content"><div class="spinner"></div></div></main>
-  <script src="assets/app.js?v=0.4"></script>
+  <script src="assets/app.js?v=0.5"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
   <script>
-    const host = new URLSearchParams(location.search).get('modo') === 'anfitriao';
-    PNC.renderChrome({ active: host && 'Mensagens' === 'Mensagens' ? 'Mensagens' : 'Mensagens', host: host && 'Mensagens' === 'Mensagens' });
+    const qs = new URLSearchParams(location.search);
+    const host = qs.get('modo') === 'anfitriao', convId = qs.get('c');
+    PNC.renderChrome({ active: 'Mensagens', host });
+    const $ = id => document.getElementById(id), esc = PNC.esc, I = PNC.icon, db = PNC.db(), c = $('content');
+    let user, conv, msgs = [], books = [], timer;
+
+    const hhmm = d => new Date(d).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+    function when(d) {
+      const x = new Date(d), now = new Date(), y = new Date(); y.setDate(y.getDate() - 1);
+      if (x.toDateString() === now.toDateString()) return hhmm(d);
+      if (x.toDateString() === y.toDateString()) return 'Ontem';
+      return x.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' });
+    }
+    const itemOf = cv => cv.listings || cv.cars || {};
+    const hrefOf = cv => { const it = itemOf(cv); return it.id ? `${cv.car_id ? '/carro.html' : '/lugar.html'}?id=${it.id}` : ''; };
+    const thumb = cv => { const it = itemOf(cv), p = PNC.photoUrl(it.cover_photo); return `<span class="conv-thumb" style="${p ? `background-image:url('${p}')` : ''}">${p ? '' : I(cv.car_id ? 'car' : 'garage')}</span>`; };
+
+    // ---------- Lista de conversas ----------
+    async function list() {
+      const { data, error } = await db.from('conversations')
+        .select('*,listings(id,title,cover_photo),cars(id,title,cover_photo)')
+        .eq(host ? 'host_id' : 'guest_id', user.id).not('last_message_at', 'is', null)
+        .order('last_message_at', { ascending: false }).limit(200);
+      if (error) { c.innerHTML = `<div class="msg err">${PNC.dbError(error)}</div>`; return; }
+      const { data: un } = await db.rpc('unread_conversations');
+      const u = (un && un[0]) || { as_guest: 0, as_host: 0 };
+      const chip = (h, label, n) => `<a class="chip ${h === host ? 'on' : ''}" href="/mensagens.html${h ? '?modo=anfitriao' : ''}">${label}${n ? ` · ${n}` : ''}</a>`;
+      c.innerHTML = `<div class="chips msg-modes">${chip(false, 'Como condutor', u.as_guest)}${chip(true, 'Como anfitrião', u.as_host)}</div>` + (data.length
+        ? `<div class="conv-list">${data.map(cv => {
+            const mine = host ? cv.host_read_at : cv.guest_read_at;
+            const unread = cv.last_sender_id !== user.id && new Date(cv.last_message_at) > new Date(mine);
+            const other = host ? cv.guest_name : cv.host_name;
+            return `<a class="conv ${unread ? 'unread' : ''}" href="/mensagens.html?c=${cv.id}${host ? '&modo=anfitriao' : ''}">
+              ${thumb(cv)}
+              <span class="conv-main"><b>${esc(other)}</b><span class="muted">${esc(itemOf(cv).title || 'Anúncio')}</span>
+                <span class="muted conv-prev">${cv.last_sender_id === user.id ? 'Você: ' : ''}${esc(cv.last_preview || '')}</span></span>
+              <span class="conv-side">${when(cv.last_message_at)}${unread ? '<span class="dot" aria-label="por ler"></span>' : ''}</span>
+            </a>`; }).join('')}</div>`
+        : `<div class="empty-card">${I('chat')}<strong>Sem mensagens</strong>${host
+            ? 'Quando um condutor lhe escrever sobre um dos seus anúncios, a conversa aparece aqui.'
+            : 'Na página de um lugar ou carro, carregue em <b>Contactar o anfitrião</b> para fazer uma pergunta.'}</div>`);
+      const ic = c.querySelector('.empty-card svg'); if (ic) ic.style.cssText = 'width:40px;height:40px;color:var(--pnc-blue);margin:0 auto 8px;display:block';
+    }
+
+    // ---------- Uma conversa ----------
+    async function openConv() {
+      const { data, error } = await db.from('conversations').select('*,listings(id,title,cover_photo),cars(id,title,cover_photo)').eq('id', convId).maybeSingle();
+      if (error || !data) { c.innerHTML = `<div class="empty-card"><strong>Conversa não encontrada</strong><a href="/mensagens.html">Voltar às mensagens</a></div>`; return; }
+      conv = data;
+      const asHost = conv.host_id === user.id;
+      if (asHost !== host && conv.guest_id !== conv.host_id) { location.replace(`/mensagens.html?c=${conv.id}${asHost ? '&modo=anfitriao' : ''}`); return; }
+      const other = asHost ? conv.guest_name : conv.host_name, href = hrefOf(conv);
+      $('title').textContent = other;
+      document.title = `${other} — Mensagens — Parkncharge`;
+      c.innerHTML = `
+        <div class="chat-head">
+          <a class="back" href="/mensagens.html${host ? '?modo=anfitriao' : ''}" aria-label="Voltar às mensagens">${I('back')}</a>
+          ${thumb(conv)}
+          <div><h2>${esc(other)}</h2><div class="muted">${asHost ? 'Condutor' : 'Anfitrião'} · ${href ? `<a href="${href}">${esc(itemOf(conv).title || '')}</a>` : esc(itemOf(conv).title || 'Anúncio')}</div></div>
+        </div>
+        <div class="chat-books" id="books"></div>
+        <div class="chat-note hidden" id="note">${I('shield')} Por segurança, telefones e emails ficam escondidos até haver uma reserva confirmada.</div>
+        <div class="chat-msgs" id="msgs" aria-live="polite"></div>
+        <form class="chat-form" id="form">
+          <textarea class="input" id="body" maxlength="2000" rows="1" placeholder="Escreva uma mensagem…" aria-label="Mensagem"></textarea>
+          <button class="btn orange" type="submit" id="send">Enviar</button>
+        </form>`;
+      const ns = $('note').querySelector('svg'); if (ns) ns.style.cssText = 'width:16px;height:16px;vertical-align:-3px';
+      await Promise.all([loadBooks(), loadMsgs()]);
+      $('form').onsubmit = send;
+      $('body').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer:coarse)').matches) { e.preventDefault(); send(e); } });
+      timer = setInterval(() => { if (!document.hidden) loadMsgs(true); }, 8000);
+    }
+    async function loadBooks() {
+      let q = db.from('bookings').select('id,status,starts_at,ends_at,total_price,expires_at').eq('driver_id', conv.guest_id).order('starts_at', { ascending: false }).limit(10);
+      q = conv.car_id ? q.eq('car_id', conv.car_id) : q.eq('listing_id', conv.listing_id);
+      const { data } = await q;
+      books = data || [];
+      const asHost = conv.host_id === user.id;
+      const confirmed = books.some(b => b.status === 'confirmada');
+      $('note').classList.toggle('hidden', confirmed);
+      $('books').innerHTML = books.length
+        ? books.slice(0, 3).map(b => { const st = PNC.bookingState(b), [label, cls] = PNC.BOOKING_STATUS[st];
+            return `<div class="chat-book"><span class="status ${cls}">${label}</span><span>${esc(PNC.fmtRange(b.starts_at, b.ends_at))}</span><b>${PNC.euro(b.total_price)}</b>
+              <a href="${asHost ? '/anfitriao.html?v=calendario' : '/reservas.html'}" style="margin-left:auto">Ver</a></div>`; }).join('')
+        : (asHost ? '' : `<div class="chat-book"><span class="muted">Ainda sem reservas neste anúncio.</span>${hrefOf(conv) ? `<a href="${hrefOf(conv)}#book" style="margin-left:auto">Reservar</a>` : ''}</div>`);
+    }
+    async function loadMsgs(poll = false) {
+      let q = db.from('messages').select('id,sender_id,body,masked,created_at').eq('conversation_id', conv.id).order('created_at').limit(500);
+      if (poll && msgs.length) q = q.gt('created_at', msgs[msgs.length - 1].created_at);
+      const { data, error } = await q;
+      if (error) return;
+      if (poll && !data.length) return;
+      msgs = poll ? msgs.concat(data.filter(m => !msgs.some(x => x.id === m.id))) : data;
+      renderMsgs();
+      db.rpc('mark_conversation_read', { p_conv: conv.id }).then(() => PNC.unreadBadge(host));
+    }
+    function renderMsgs() {
+      const box = $('msgs'), atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+      let day = '';
+      box.innerHTML = msgs.length ? msgs.map(m => {
+        const d = new Date(m.created_at).toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
+        const sep = d !== day ? `<div class="chat-day">${esc(d)}</div>` : ''; day = d;
+        return `${sep}<div class="bubble ${m.sender_id === user.id ? 'me' : ''}">${esc(m.body)}${m.masked ? '<span class="masked">Contactos escondidos até haver uma reserva confirmada.</span>' : ''}<small>${hhmm(m.created_at)}</small></div>`;
+      }).join('') : `<p class="muted center" style="margin:auto">Escreva a primeira mensagem${conv.host_id === user.id ? '' : ' ao anfitrião'}.</p>`;
+      if (atBottom || !renderMsgs.done) box.scrollTop = box.scrollHeight;
+      renderMsgs.done = true;
+    }
+    async function send(e) {
+      e.preventDefault();
+      const t = $('body').value.trim(); if (!t) return;
+      $('send').disabled = true;
+      const { data, error } = await db.from('messages').insert({ conversation_id: conv.id, body: t }).select('id,sender_id,body,masked,created_at').single();
+      $('send').disabled = false;
+      if (error) return PNC.toast(PNC.dbError(error), 'err');
+      $('body').value = '';
+      msgs.push(data); renderMsgs.done = false; renderMsgs();
+      if (data.masked) PNC.toast('Os contactos foram escondidos: só aparecem depois de uma reserva confirmada.');
+    }
+
     (async () => {
-      const c = document.getElementById('content');
-      const user = await PNC.currentUser();
+      if (!db) { c.innerHTML = '<div class="msg err">Não foi possível ligar ao servidor.</div>'; return; }
+      user = await PNC.currentUser();
       if (!user) {
-        c.innerHTML = `<h2>Sem mensagens</h2><p class="muted">Entre na sua conta para ver esta página.</p><a class="btn block" href="/login.html?next=${encodeURIComponent(location.pathname + location.search)}">Entrar</a>`;
+        c.innerHTML = `<h2>As suas mensagens</h2><p class="muted">Entre na sua conta para falar com anfitriões e condutores.</p><a class="btn block" href="/login.html?next=${encodeURIComponent(location.pathname + location.search)}">Entrar</a>`;
         return;
       }
-      c.innerHTML = `<div class="empty-card">${PNC.icon('chat')}<strong>Sem mensagens</strong>As conversas com anfitriões e condutores aparecem aqui.<br><small>Disponível na v0.5.</small></div>`;
-      c.querySelector('svg').style.cssText = 'width:40px;height:40px;color:var(--pnc-blue);margin:0 auto 8px;display:block';
+      convId ? openConv() : list();
     })();
   </script>
 </body>

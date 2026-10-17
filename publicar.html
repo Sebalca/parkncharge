@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="assets/style.css?v=0.4">
+  <link rel="stylesheet" href="assets/style.css?v=0.5">
 </head>
 <body class="no-nav">
   <div class="page-top"><div class="wrap page">
@@ -30,7 +30,7 @@
     <button class="btn" id="next" type="button">Seguinte</button>
   </div></div>
 
-  <script src="assets/app.js?v=0.4"></script>
+  <script src="assets/app.js?v=0.5"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -331,17 +331,12 @@
       <div class="field"><label for="ph">Por hora</label><div class="input-euro"><input class="input" id="ph" inputmode="decimal" value="${L0.price_hour ?? ''}"></div></div>
       <div class="field"><label for="pd">Por dia</label><div class="input-euro"><input class="input" id="pd" inputmode="decimal" value="${L0.price_day ?? ''}"></div></div>
       <div class="field"><label for="pm">Por mês</label><div class="input-euro"><input class="input" id="pm" inputmode="decimal" value="${L0.price_month ?? ''}"></div></div>
-      <span class="label" style="margin-top:8px">Como quer receber as reservas?</span>
-      <div class="options" id="book">
-        <button type="button" class="option ${L0.instant_book ? 'on' : ''}" data-v="1">${I('bolt')}<span><b>Reserva instantânea</b><small>Os condutores reservam logo, sem esperar pela sua aprovação</small></span></button>
-        <button type="button" class="option ${L0.instant_book ? '' : 'on'}" data-v="0">${I('check')}<span><b>Aprovo cada pedido</b><small>Recebe o pedido e aceita ou recusa</small></span></button>
-      </div>`;
-    R.precos.after = () => $('book').onclick = e => { const o = e.target.closest('.option'); if (o) document.querySelectorAll('#book .option').forEach(x => x.classList.toggle('on', x === o)); };
+      <p class="hint">${I('bolt')} As reservas são instantâneas: ficam confirmadas logo. Pode cancelar uma reserva com motivo, no modo anfitrião.</p>`;
     S.precos = async () => {
       const ph = num($('ph').value), pd = num($('pd').value), pm = num($('pm').value);
       if ([ph, pd, pm].some(v => v != null && (isNaN(v) || v <= 0))) return err('Os preços têm de ser números maiores que zero.'), false;
       if (ph == null && pd == null && pm == null) return err('Indique pelo menos um preço.'), false;
-      await saveListing({ price_hour: ph, price_day: pd, price_month: pm, instant_book: document.querySelector('#book .option.on').dataset.v === '1' });
+      await saveListing({ price_hour: ph, price_day: pd, price_month: pm });
     };
 
     // Rever e enviar
@@ -365,7 +360,6 @@
           <dt>Fotografias</dt><dd>${photos.length}</dd>
           <dt>Horário</dt><dd>${days || '—'}</dd>
           <dt>Preços</dt><dd>${prices}</dd>
-          <dt>Reservas</dt><dd>${L0.instant_book ? 'Instantâneas' : 'Com aprovação'}</dd>
         </dl></div>
         <div class="field" style="margin-top:20px"><label for="acc">Instruções de acesso <span class="muted" style="font-weight:400">(privadas)</span></label>
           <textarea class="input" id="acc" maxlength="1000" ${readonly ? 'disabled' : ''} placeholder="Ex.: Portão da Rua X, código enviado no dia. Piso -1, lugar 23.">${esc(P0 ? P0.access_instructions || '' : '')}</textarea>

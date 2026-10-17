@@ -36,7 +36,7 @@ separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque
   `vehicle_types[]` (moto, carro, carrinha, autocarro, camiao, autocaravana),
   `is_covered`, `is_underground`, `is_closed`, `is_solo`, `easy_entry`, `max_height_m`,
   `has_charger`, `charger_type`, `charger_kw`, `charge_price_mode` (incluido/a_parte), `charge_price_kwh`,
-  `price_hour`, `price_day`, `price_month`, `instant_book`, `cover_photo`, `submitted_at`, `approved_at`, `approved_by`,
+  `price_hour`, `price_day`, `price_month`, `instant_book` (sempre true desde a v0.4a; sem efeito), `cover_photo`, `submitted_at`, `approved_at`, `approved_by`,
   `is_demo` (anúncio de exemplo), `demo_occupied` (ocupação simulada até às reservas)
 - **listing_private** — `listing_id`, `address`, `postal_code`, `lat`, `lng`, `access_instructions`
 - **listing_photos** — `id`, `listing_id`, `storage_path`, `position`
@@ -45,9 +45,14 @@ separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque
   `status` (pedido/confirmada/recusada/cancelada/expirada — "a decorrer" e "concluída" vêm das datas), `total_price`, `price_label`, `vehicle_note`, `message`,
   `expires_at` (prazo do pedido: 24 h ou até ao início), `decided_at`, `cancel_reason`, `cancelled_by` (condutor/anfitriao/admin), `is_demo`, `created_at`, `updated_at`
   - Restrições de exclusão (`btree_gist`) por lugar e por carro: pedidos ativos e confirmadas não se sobrepõem
-  - Trigger `bookings_guard`: anúncio ativo, não o próprio, início no futuro, 30 min a 1 ano, `fits_schedule`, preço por `booking_price`, estado inicial (instantânea → confirmada; senão pedido); transições permitidas (anfitrião aceita/recusa/cancela com motivo; condutor cancela pedido ou confirmada até ao início; pedidos vencidos → expirada); os dados da reserva nunca mudam
+  - Trigger `bookings_guard`: anúncio ativo, não o próprio, início no futuro, 30 min a 1 ano, `fits_schedule`, preço por `booking_price`; desde a v0.4a o estado é **sempre confirmada**; transições permitidas: anfitrião cancela com motivo; condutor cancela até ao início; o admin pode tudo; os dados da reserva nunca mudam (pedido/recusada/expirada ficam só no histórico)
   - Funções: `occupied_now()` (ocupados agora, público), `busy_periods(lugar, carro)` (períodos ocupados sem dizer de quem, público), `expire_requests()`, `booking_access(reserva)` (morada/instruções só para o condutor de reserva confirmada até ao fim, o anfitrião e o admin)
-- **messages** — `id`, `booking_id`, `sender_id`, `body`, `created_at`
+- **conversations** (v0.5) — `id`, `listing_id` **ou** `car_id`, `guest_id` (condutor), `host_id`, `guest_name`, `host_name` (primeiros nomes), `last_message_at`, `last_preview`, `last_sender_id`, `guest_read_at`, `host_read_at`, `created_at`
+  - Uma por anúncio e condutor (índices únicos). Cria-se só pela função `open_conversation(lugar, carro, condutor?)`: o condutor abre a sua (anúncio ativo, não o próprio); o anfitrião só abre com quem reservou o anúncio
+  - `mark_conversation_read(conversa)` e `unread_conversations()` (por ler como condutor / como anfitrião)
+- **messages** (v0.5) — `id`, `conversation_id`, `sender_id`, `body` (1–2000), `masked` (tinha contactos escondidos), `created_at`
+  - Trigger `messages_guard`: só participantes; se não houver reserva confirmada nesse anúncio entre os dois, `mask_contacts` troca emails e números com 9+ algarismos por •••; atualiza a última mensagem da conversa
+- **test_accounts** (v0.4a) — `user_id`, `kind` (condutor/anfitriao): as duas contas de teste do "Entrar como". Leitura só admin. `setup_test_account()` só com a chave de serviço (Edge Function `parkncharge-entrar-como`)
 - **cars** — como `listings`, mas com `brand`, `model`, `year`, `category` (citadino/familiar/suv/carrinha/monovolume/desportivo), `fuel` (gasolina/gasoleo/hibrido/eletrico/gpl), `transmission` (manual/automatica), `seats`, `doors`, `range_km`, `features[]` (ac, gps, bluetooth, cadeira_bebe, engate, teto_panoramico, camara_marcha_atras, cruise_control), `km_included_day`, `min_age`, `deposit`
 - **car_private** — `car_id`, `address`, `lat`, `lng`, `plate`, `pickup_instructions`
 - **car_photos** — `id`, `car_id`, `storage_path`, `position` (máx. 6)
@@ -61,7 +66,7 @@ separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque
 - Anúncios `ativo`: leitura pública (sem `access_instructions`, servidas por função só ao condutor com reserva confirmada).
 - Anúncios: só o anfitrião cria/edita os seus.
 - Reservas: só o condutor, o anfitrião dessa reserva e o admin veem e alteram (sem apagar); anónimos só veem os períodos ocupados, pela função `busy_periods`.
-- Mensagens (v0.5): só o condutor e o anfitrião dessa reserva.
+- Mensagens (v0.5): só o condutor e o anfitrião da conversa (e o admin) leem; escrevem só os dois, em nome próprio; ninguém edita nem apaga.
 - Avaliações: leitura pública; escrita só por quem tem uma reserva concluída.
 - Favoritos: só o próprio.
 - Nenhuma service key no frontend nem no GitHub.

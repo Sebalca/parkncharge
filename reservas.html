@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=0.4">
+  <link rel="stylesheet" href="assets/style.css?v=0.5">
 </head>
 <body>
   <div class="page-top"><div class="wrap page"><h1>Reservas</h1></div></div>
@@ -25,7 +25,7 @@
     </div>
   </main>
 
-  <script src="assets/app.js?v=0.4"></script>
+  <script src="assets/app.js?v=0.5"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
   <script>
@@ -59,6 +59,7 @@
           <div class="actions">
             ${access ? `<button class="btn small" data-act="access" data-id="${b.id}">${I('target')} ${car ? 'Local de recolha' : 'Morada e acesso'}</button>` : ''}
             ${st === 'concluida' && href ? `<a class="btn small ghost" href="${href}#avaliacoes">${I('star')} Avaliar</a>` : ''}
+            ${it.id ? `<button class="btn small ghost" data-act="msg" data-id="${b.id}">${I('chat')} Mensagem</button>` : ''}
             ${canCancel ? `<button class="btn small danger" data-act="cancel" data-id="${b.id}">${b.status === 'pedido' ? 'Cancelar pedido' : 'Cancelar reserva'}</button>` : ''}
           </div>
         </div>
@@ -77,6 +78,7 @@
     $('content').onclick = async e => {
       const btn = e.target.closest('[data-act]'); if (!btn) return;
       const id = btn.dataset.id, b = rows.find(x => x.id === id);
+      if (btn.dataset.act === 'msg') return PNC.openConversation(b.car_id ? { car: b.car_id } : { listing: b.listing_id }, btn);
       if (btn.dataset.act === 'access') {
         const box = $('acc-' + id);
         if (!box.classList.contains('hidden')) { box.classList.add('hidden'); return; }
