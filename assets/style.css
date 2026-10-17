@@ -569,3 +569,40 @@ a.card:hover .card-title { text-decoration: underline; }
   .item-sec:first-child { padding-top: 0; }
 }
 @media (max-width: 699px) { .book { order: -1; } }
+
+/* ---------- Reservas ---------- */
+.bk-list { display: grid; gap: 14px; }
+.bk { display: flex; gap: 14px; background: #fff; border-radius: var(--radius-lg); padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.bk-thumb { width: 96px; height: 96px; border-radius: 14px; background: #E4E8EC center/cover; flex: none; display: grid; place-items: center; color: #A7B3BD; }
+.bk-thumb svg { width: 40%; height: 40%; }
+.bk-body { flex: 1; min-width: 0; }
+.bk-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.bk-kind { margin-left: auto; font-size: 13px; }
+.bk h3 { margin: 0 0 4px; font-size: 17px; }
+.bk h3 a { color: inherit; text-decoration: none; }
+.bk h3 a:hover { text-decoration: underline; }
+.bk-when { display: flex; align-items: center; gap: 6px; font-size: 15px; margin-bottom: 2px; }
+.bk-when svg { width: 16px; height: 16px; color: var(--pnc-blue); }
+.bk-note { background: var(--pnc-cream-2); border-radius: 10px; padding: 8px 10px; font-size: 14px; margin-top: 8px; }
+.bk-access { background: #EEF5EF; border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-top: 8px; }
+.bk-access p { margin: 6px 0; white-space: pre-line; }
+.bk .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.bk .actions svg { width: 16px; height: 16px; }
+.cal-day h2 { font-size: 18px; }
+
+/* caixa de reserva */
+.book-more { margin: 0 0 12px; }
+.book-more summary { cursor: pointer; color: var(--pnc-blue); font-family: var(--font-head); font-weight: 600; font-size: 15px; margin-bottom: 8px; }
+.book-more .input { margin-bottom: 8px; background: var(--pnc-cream-2); }
+.book-more textarea.input { min-height: 70px; }
+.busy { margin-top: 16px; border-top: 1px solid var(--pnc-line); padding-top: 12px; font-size: 14px; }
+.busy ul { margin: 6px 0 0; padding-left: 18px; }
+.busy li { margin: 2px 0; }
+.book-done { text-align: center; padding: 8px 0; }
+.book-done h3 { margin: 8px 0 4px; font-size: 21px; }
+.book-done p { margin: 4px 0; }
+.book-done .btn { margin-top: 12px; }
+.book-done-ico { width: 56px; height: 56px; border-radius: 50%; background: var(--pnc-cream); color: var(--pnc-blue-dark); display: grid; place-items: center; margin: 0 auto; }
+.book-done-ico.ok { background: #E6F2EA; color: var(--pnc-ok); }
+.book-done-ico svg { width: 30px; height: 30px; }
+@media (max-width: 559px) { .bk-thumb { width: 72px; height: 72px; } }

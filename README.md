@@ -42,7 +42,7 @@ anfitriao.html      modo anfitrião: os meus lugares, dados de anfitrião, Hoje,
 publicar.html       assistente de publicação/edição de um lugar (9 passos)
 admin.html          aprovação de anúncios (só administradores)
 favoritos.html      em breve (v0.6)
-reservas.html       em breve (v0.4)
+reservas.html       reservas do condutor (Próximas, Anteriores, Canceladas)
 mensagens.html      em breve (v0.5)
 ajuda.html          centro de ajuda (âncoras #sobre, #anfitrioes, #carregadores, #cancelamentos, #seguranca)
 termos.html         termos (em preparação, v0.8)
@@ -57,6 +57,7 @@ docs/modelo-dados.md          tabelas, regras e estado da base de dados
 supabase/migrations/          SQL aplicado no Supabase, por ordem
 supabase/seed/exemplos_sao_mamede.sql   cria (ou recria) as 12 garagens de exemplo
 supabase/seed/exemplos_carros_avaliacoes.sql   cria os 10 carros e as avaliações de exemplo
+supabase/seed/exemplos_reservas.sql   cria as 10 reservas de exemplo
 tests/regressao.cjs           testes automáticos (Playwright)
 CLAUDE.md                     processo obrigatório para cada alteração
 PATCH NOTES.md                decisões fixas + histórico de versões
@@ -75,7 +76,9 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
 | `CAR_CATEGORIES`, `CAR_LABELS`, `SEATS` | Categorias de carros, nomes em português (combustível, caixa, extras) e opções de lugares mínimos. |
 | `matchAll(lista, categorias, ids)` | Filtra por várias categorias ao mesmo tempo (o anúncio tem de cumprir todas). |
 | `ratingOf()`, `fmtRating()`, `stars()` | Média e número de avaliações, formato "4,5" e estrelas em SVG. |
-| `estimate(anúncio, início, fim)` | Preço estimado: a combinação mais barata de horas, dias (com horas a mais) e meses. |
+| `estimate(anúncio, início, fim)` | Preço: a combinação mais barata de horas, dias (com horas a mais) e meses. É o mesmo cálculo que o servidor faz em `booking_price`. |
+| `fitsSchedule(horário, início, fim, carro)` | Verifica se o período cabe no horário, com as mesmas regras do servidor: lugar = período inteiro; carro = levantar e entregar; 30 dias ou mais = sem limite. |
+| `bookingState(reserva)`, `BOOKING_STATUS`, `fmtRange()`, `fmtDT()` | Estado mostrado de uma reserva (incluindo "a decorrer" e "concluída", que vêm das datas), nomes e cores, e datas em português. |
 | `DEFAULT_LOC` | Localização por defeito (fictícia): São Mamede de Infesta. |
 | `openNow()`, `nextOpening()`, `availability(l)` | Estado de um lugar agora: `disponivel`, `ocupada` (simulada, `demo_occupied`) ou `fechada` (fora do horário, com a próxima abertura). |
 | `db()` | Cliente Supabase já apontado para o schema `parkncharge` (`plataforma.schema('parkncharge')`). |
@@ -123,7 +126,7 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
 - **Com pesquisa por texto** (zona ou título): grelha de resultados.
 - **Estado de cada lugar** (`PNC.availability`):
   - **Disponível agora:** aberto pelo horário semanal e livre;
-  - **Ocupada:** ocupação simulada (`demo_occupied`) até às reservas da v0.4;
+  - **Ocupada** (lugar) / **Alugado** (carro): há uma reserva confirmada a decorrer (função `occupied_now`);
   - **Fechada agora · abre … às …:** fora do horário.
 - **Cartão** (é um link para a página do anúncio):
   - foto de capa, selos "Carregador"/"Elétrico" e **"Exemplo"**, ❤ (favoritos, só visual até à v0.6);
@@ -143,12 +146,28 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
 - **Descrição**, **horário** da semana (o dia de hoje a negrito) e **zona** num mapa com um círculo de ~300 m. A morada exata é enviada depois da reserva.
 - **Avaliações:**
   - média grande, estrelas e barras por número de estrelas, depois a lista (nome, mês, estrelas, comentário; selos "Exemplo" e "A sua avaliação").
-  - Formulário de 1 a 5 estrelas + comentário: publicar, editar ou apagar a sua.
-  - Sem sessão aparece "entre na sua conta"; o dono do anúncio vê que não pode avaliar.
+  - Formulário de 1 a 5 estrelas + comentário, só para quem tem uma **reserva concluída** deste anúncio: publicar, editar ou apagar a sua.
+  - Sem sessão aparece "entre na sua conta"; o dono do anúncio vê que não pode avaliar; quem não reservou vê porque não pode.
 - **Caixa de reserva** (fixa ao lado no computador; no telemóvel aparece logo depois da galeria):
   - preços (hora, dia, mês) e estado agora;
-  - início e fim (ou levantar e entregar), com o total estimado (`PNC.estimate`);
-  - botão "Reservas em breve" (desativado até à v0.4).
+  - início e fim (ou levantar e entregar), já preenchidos com o primeiro período livre dentro do horário;
+  - avisos se o período ficar fora do horário, sobreposto ou no passado; total calculado;
+  - opcional: veículo (matrícula/modelo, só nos lugares) e mensagem ao anfitrião;
+  - botão **Reservar** (reserva instantânea) ou **Pedir reserva** (com aprovação). Sem sessão leva ao login. O dono vê "É o seu anúncio".
+  - No fim, a confirmação: "Reserva confirmada" (a morada já está na reserva) ou "Pedido enviado" (com o prazo do anfitrião).
+  - Lista dos períodos **já reservados** (função `busy_periods`, sem dizer de quem).
+
+### Reservas — condutor (`reservas.html`)
+- Separadores **Próximas** (pedidos, confirmadas, a decorrer), **Anteriores** (concluídas) e **Canceladas** (recusadas, canceladas, expiradas).
+- Cada reserva mostra foto, estado, selo "Exemplo", título (link para o anúncio), datas, zona, total e uma nota:
+  - "aguarda resposta até…" num pedido;
+  - o motivo de uma recusa ou de um cancelamento feito pelo anfitrião;
+  - "o anfitrião não respondeu a tempo" num pedido expirado.
+- **Ações:**
+  - **Morada e acesso** / **Local de recolha** (confirmada, até ao fim): função `booking_access` → morada, código postal, matrícula (carros), instruções e link para o mapa.
+  - **Avaliar** quando concluída.
+  - **Cancelar** um pedido, ou uma confirmada antes do início.
+- Ao abrir, a página chama `expire_requests` para fechar pedidos vencidos.
 
 ### Menu da conta (janela do canto superior direito)
 - O botão ☰ + avatar abre uma **janela**, não uma página, em todas as páginas (também no telemóvel).
@@ -186,7 +205,9 @@ Cada página carrega, por esta ordem: `assets/app.js`, `supabase-js@2` (jsDelivr
   | Recusado | com o motivo à vista | Corrigir e reenviar, Apagar |
   | Pausado | escondido pelo anfitrião | Reativar, Editar |
 
-- **Hoje** e **Calendário:** por agora só explicam que chegam com as reservas (v0.4).
+- **Hoje** (`?v=hoje`): pedidos por responder (**Aceitar** / **Recusar**, com o prazo), chegadas e saídas do dia (com a hora) e reservas a decorrer.
+- **Calendário** (`?v=calendario`): agenda dos próximos 30 dias, dia a dia, com pedidos e reservas confirmadas.
+- Cada reserva mostra o primeiro nome do condutor, o anúncio, as datas, o veículo, o total e a mensagem. Pode **cancelar** uma confirmada, com motivo obrigatório.
 
 ### Publicar um lugar (`publicar.html`)
 Assistente em 9 passos, com barra de progresso. **Cada passo é guardado ao carregar em "Seguinte"**, por isso um rascunho pode ser continuado mais tarde (`?id=…`).
@@ -251,6 +272,14 @@ Descrição completa das colunas e das próximas tabelas (reservas, mensagens, f
   - só se avaliam anúncios ativos e nunca os próprios;
   - quem não é admin não pode criar exemplos nem mudar o autor ou o anúncio.
   - Índices únicos garantem uma avaliação por pessoa e anúncio.
+  - Desde a v0.4 exige uma reserva confirmada já terminada desse anúncio.
+- **`bookings_guard`** (reservas):
+  - **ao criar:** o condutor é quem tem a sessão; o anúncio tem de estar ativo e não pode ser o próprio; o início tem de ser no futuro; dura de 30 min a 1 ano; tem de cumprir `fits_schedule`.
+  - O **preço** (`booking_price`) e o **estado** são decididos aqui: instantânea → confirmada; com aprovação → pedido, com `expires_at` = 24 h ou o início.
+  - Pedidos vencidos desse anúncio passam a expirados (deixam de bloquear).
+  - **ao alterar:** os dados da reserva nunca mudam; só o estado, pelas regras D71–D72 (anfitrião aceita/recusa um pedido no prazo e cancela uma confirmada com motivo; condutor cancela um pedido ou uma confirmada antes do início; o admin pode tudo).
+  - As restrições de exclusão (`btree_gist`) impedem dois pedidos/confirmadas sobrepostos no mesmo lugar ou carro.
+- As funções dos triggers não estão expostas na API (migração `v04c`).
 
 ### Segurança (RLS)
 | Tabela | Quem lê | Quem escreve |
@@ -261,7 +290,9 @@ Descrição completa das colunas e das próximas tabelas (reservas, mensagens, f
 | `host_profiles` | o próprio e o admin | o próprio |
 | `cars`, `car_photos`, `car_schedule` | iguais a `listings` e às suas fotos/horário | o dono (e o admin) |
 | `car_private` | só o dono e o admin | só o dono |
-| `reviews` | todos | o autor (inserir, editar, apagar); o admin pode apagar |
+| `reviews` | todos | o autor com reserva concluída (inserir, editar, apagar); o admin pode apagar |
+| `bookings` | o condutor, o anfitrião dessa reserva e o admin; anónimos só os períodos ocupados (`busy_periods`) e os ocupados agora (`occupied_now`) | criar: qualquer conta (como condutor); alterar o estado: condutor/anfitrião pelas regras; ninguém apaga |
+| morada exata / instruções | só pela função `booking_access`: o condutor de uma reserva confirmada até ao fim, o anfitrião e o admin | — |
 | Storage `parkncharge` | leitura pública (fotos dos anúncios) | só na pasta `{user_id}/` do próprio; máx. 5 MB; JPEG, PNG ou WebP |
 
 - As regras foram testadas com SQL como anónimo, outro utilizador, dono e admin.
@@ -312,20 +343,21 @@ Servir a pasta (`python3 -m http.server` ou `npx serve .`) e abrir `http://local
 - Google Fonts: Josefin Sans e Lato.
 - OpenStreetMap: tiles do mapa (Explorar e assistente) e Nominatim (pesquisa de moradas no assistente; localidade ao usar o GPS). O uso é leve: uma pesquisa por clique. Se o tráfego crescer, passar para um fornecedor com chave.
 
-### Exemplos (garagens, carros e avaliações)
+### Exemplos (garagens, carros, avaliações e reservas)
 - **12 garagens fictícias:** 7 em São Mamede de Infesta e 5 em Senhora da Hora, Custóias, Paranhos, Leça do Balio e Matosinhos. 2 estão ocupadas e 1 só abre em dias úteis.
 - **10 carros fictícios:** 6 em São Mamede de Infesta e 4 em Senhora da Hora, Paranhos, Custóias e Matosinhos. Há elétricos, híbrido, 7 lugares, carrinha e GPL; 1 está alugado e 2 só existem em dias úteis.
 - **65 avaliações de exemplo** (2 a 4 por anúncio), com nomes inventados.
+- **10 reservas de exemplo** com condutores inventados: 3 a decorrer (por isso há anúncios Ocupado/Alugado), 3 futuras, 2 pedidos por responder (aparecem no Hoje do administrador) e 2 concluídas.
 - Tudo na conta do administrador, com `is_demo = true`, o selo "Exemplo", ilustrações em `assets/demo/` e moradas sem número de porta.
-- **Recriar:** correr `supabase/seed/exemplos_sao_mamede.sql` e depois `supabase/seed/exemplos_carros_avaliacoes.sql` no editor SQL do Supabase.
-- **Apagar tudo** (antes da beta, v0.8): `delete from parkncharge.listings where is_demo; delete from parkncharge.cars where is_demo; delete from parkncharge.reviews where is_demo;`
+- **Recriar:** correr no editor SQL do Supabase, por esta ordem: `supabase/seed/exemplos_sao_mamede.sql`, `exemplos_carros_avaliacoes.sql` e `exemplos_reservas.sql` (as datas são relativas ao momento em que se corre).
+- **Apagar tudo** (antes da beta, v0.8): `delete from parkncharge.bookings where is_demo; delete from parkncharge.reviews where is_demo; delete from parkncharge.listings where is_demo; delete from parkncharge.cars where is_demo;`
 
-### Limitações conhecidas (v0.2c)
-- Favoritos, Reservas e Mensagens são páginas "em breve". O botão de reservar mostra só o preço estimado.
+### Limitações conhecidas (v0.4)
+- Favoritos e Mensagens são páginas "em breve" (v0.6 e v0.5). Ainda não há emails de aviso: o anfitrião vê os pedidos no Hoje.
+- O pagamento é combinado entre as partes (Stripe na v1.1).
+- Os pedidos vencidos passam a "expirada" quando alguém abre as reservas ou faz uma nova reserva desse anúncio (não há tarefa agendada). Até lá aparecem como expirados no site, mas o período só fica livre nesse momento.
 - Os carros ainda não se publicam pelo modo anfitrião (só existem os de exemplo); a aprovação em `admin.html` é só de lugares.
-- As avaliações são abertas a qualquer conta até haver reservas (v0.4).
-- As datas da pesquisa ainda não filtram.
-- A ocupação é simulada nos exemplos; os lugares reais só ficam "ocupados" com as reservas (v0.4).
+- As datas da pesquisa ainda não filtram o Explorar (a página do anúncio já verifica o horário e as reservas).
 - A localização arranca fixa em São Mamede de Infesta até se usar o GPS.
 - A distância usa a posição aproximada (~300 m) e é calculada no browser (PostGIS mais tarde).
 - Termos e privacidade ainda por escrever (antes da beta, v0.8).

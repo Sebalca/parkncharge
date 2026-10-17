@@ -8,7 +8,7 @@
   const I = PNC.icon, esc = PNC.esc, $ = id => document.getElementById(id);
   const id = new URLSearchParams(location.search).get('id');
   const root = $('item');
-  let L0, reviews = [], user = null;
+  let L0, reviews = [], user = null, busy = [], canReview = false;
 
   PNC.renderChrome({ active: 'Explorar' });
 
@@ -90,6 +90,7 @@
   function reviewForm(mine) {
     if (!user) return `<div class="msg info">Para avaliar, <a href="/login.html?next=${encodeURIComponent(location.pathname + location.search)}">entre na sua conta</a>.</div>`;
     if (user.id === L0.host_id) return `<p class="muted">Não pode avaliar os seus próprios anúncios.</p>`;
+    if (!mine && !canReview) return `<p class="muted">Só quem fez uma reserva concluída ${CAR ? 'deste carro' : 'deste lugar'} pode avaliar.</p>`;
     const r = mine || { rating: 0, comment: '' };
     return `<form class="rev-form" id="rform">
       <b>${mine ? 'Editar a sua avaliação' : 'Deixe a sua avaliação'}</b>
@@ -98,7 +99,7 @@
       <textarea class="input" id="rcomment" maxlength="1000" placeholder="Como correu? (opcional)">${esc(r.comment || '')}</textarea>
       <div class="rev-actions"><button class="btn small" type="submit">${mine ? 'Guardar' : 'Publicar avaliação'}</button>
         ${mine ? '<button class="btn small danger" type="button" id="rdel">Apagar</button>' : ''}</div>
-      <p class="hint">Uma avaliação por pessoa. Pode editá-la quando quiser. A partir das reservas (v0.4) só quem usou o ${CAR ? 'carro' : 'lugar'} poderá avaliar.</p>
+      <p class="hint">Uma avaliação por pessoa. Pode editá-la quando quiser.</p>
     </form>`;
   }
   function wireReviewForm() {
@@ -147,26 +148,80 @@
   function bookingBox() {
     const l = L0, av = PNC.availability(l);
     const prices = [l.price_hour && [PNC.euro(l.price_hour), 'hora'], l.price_day && [PNC.euro(l.price_day), 'dia'], l.price_month && [PNC.euro(l.price_month), 'mês']].filter(Boolean);
-    const s = new Date(); s.setMinutes(0, 0, 0); s.setHours(s.getHours() + 1);
-    const e = new Date(s.getTime() + (l.price_hour ? 2 : 24) * 36e5);
+    const [s, e] = defaultPeriod();
+    const own = user && user.id === l.host_id;
     return `<aside class="book" id="book">
       <div class="book-price"><b>${prices[0][0]}</b> / ${prices[0][1]}${prices.slice(1).map(p => ` <span class="muted">· ${p[0]} / ${p[1]}</span>`).join('')}</div>
       <div class="avail av-${av.key}">${esc(av.label)}</div>
-      <div class="book-dates">
-        <label><span>${CAR ? 'Levantar' : 'Início'}</span><input type="datetime-local" id="bstart" value="${toLocal(s)}"></label>
-        <label><span>${CAR ? 'Entregar' : 'Fim'}</span><input type="datetime-local" id="bend" value="${toLocal(e)}"></label>
+      <div id="bform">
+        <div class="book-dates">
+          <label><span>${CAR ? 'Levantar' : 'Início'}</span><input type="datetime-local" id="bstart" value="${toLocal(s)}"></label>
+          <label><span>${CAR ? 'Entregar' : 'Fim'}</span><input type="datetime-local" id="bend" value="${toLocal(e)}"></label>
+        </div>
+        <div class="book-est" id="best"></div>
+        ${own ? '' : `<details class="book-more"><summary>${CAR ? 'Mensagem ao anfitrião' : 'Veículo e mensagem'} (opcional)</summary>
+          ${CAR ? '' : '<input class="input" id="bveh" maxlength="80" placeholder="Matrícula ou modelo (ex.: Renault Clio)">'}
+          <textarea class="input" id="bmsg" maxlength="500" placeholder="${CAR ? 'Ex.: para que precisa do carro, hora de chegada…' : 'Ex.: hora de chegada, dúvidas sobre o acesso…'}"></textarea>
+        </details>`}
+        <button class="btn block orange" type="button" id="bgo" ${own ? 'disabled' : ''}>${own ? 'É o seu anúncio' : l.instant_book ? 'Reservar' : 'Pedir reserva'}</button>
+        <p class="hint center">${l.instant_book ? 'Reserva instantânea: fica confirmada de imediato.' : 'O anfitrião tem até 24 h (ou até ao início) para aceitar o pedido.'} O pagamento é combinado com o anfitrião.</p>
       </div>
-      <div class="book-est" id="best"></div>
-      <button class="btn block orange" type="button" disabled aria-disabled="true">Reservas em breve</button>
-      <p class="hint center">As reservas chegam na v0.4. Por agora pode ver o preço estimado.</p>
+      ${busy.length ? `<div class="busy"><b>Já reservado</b><ul>${busy.slice(0, 6).map(p => `<li>${esc(PNC.fmtRange(p.starts_at, p.ends_at))}${p.pending ? ' <span class="muted">(pedido)</span>' : ''}</li>`).join('')}</ul>${busy.length > 6 ? `<small class="muted">e mais ${busy.length - 6}</small>` : ''}</div>` : ''}
     </aside>`;
   }
+  // Primeiro período livre dentro do horário, a partir da próxima hora (procura nos próximos 7 dias)
+  function defaultPeriod() {
+    const len = (L0.price_hour ? 2 : 24) * 36e5;
+    const s = new Date(); s.setMinutes(0, 0, 0); s.setHours(s.getHours() + 1);
+    for (let i = 0; i < 24 * 7; i++, s.setHours(s.getHours() + 1)) {
+      const e = new Date(s.getTime() + len);
+      if (PNC.fitsSchedule(PNC.scheduleOf(L0), s, e, CAR) && !overlaps(s, e)) return [new Date(s), e];
+    }
+    const s0 = new Date(); s0.setMinutes(0, 0, 0); s0.setHours(s0.getHours() + 1);
+    return [s0, new Date(s0.getTime() + len)];
+  }
+  const overlaps = (s, e) => busy.some(p => new Date(p.starts_at) < e && new Date(p.ends_at) > s);
   function updateEstimate() {
-    const s = new Date($('bstart').value), e = new Date($('bend').value), out = $('best');
-    if (!(e > s)) { out.innerHTML = '<div class="msg err">O fim tem de ser depois do início.</div>'; return; }
+    const s = new Date($('bstart').value), e = new Date($('bend').value), out = $('best'), go = $('bgo');
+    const bad = msg => { out.innerHTML = `<div class="msg err">${msg}</div>`; if (go && !go.textContent.startsWith('É o')) go.disabled = true; };
+    if (!(e > s)) return bad('O fim tem de ser depois do início.');
+    if (s < new Date(Date.now() - 5 * 6e4)) return bad('O início já passou.');
+    if (e - s < 30 * 6e4) return bad('A reserva tem de durar pelo menos 30 minutos.');
+    if (!PNC.fitsSchedule(PNC.scheduleOf(L0), s, e, CAR)) return bad(CAR ? 'Levantar e entregar têm de ser dentro do horário indicado abaixo.' : 'Fora do horário do lugar (veja o horário abaixo). Reservas de 30 dias ou mais não têm esta limitação.');
+    if (overlaps(s, e)) return bad('Já há uma reserva nesse período.');
     const est = PNC.estimate(L0, s, e);
     out.innerHTML = est ? `<div class="est-row"><span>${esc(est.label)}</span><span>${PNC.euro(est.total)}</span></div>
-      <div class="est-row total"><span>Total estimado</span><span>${PNC.euro(est.total)}</span></div>` : '';
+      <div class="est-row total"><span>Total</span><span>${PNC.euro(est.total)}</span></div>` : '';
+    if (go && !go.textContent.startsWith('É o')) go.disabled = false;
+  }
+  async function submitBooking() {
+    if (!user) { location.href = '/login.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
+    const go = $('bgo'); go.disabled = true; go.textContent = 'A enviar…';
+    const row = { [MODE.reviewKey]: L0.id, starts_at: new Date($('bstart').value).toISOString(), ends_at: new Date($('bend').value).toISOString() };
+    const veh = $('bveh') && $('bveh').value.trim(), msg = $('bmsg') && $('bmsg').value.trim();
+    if (veh) row.vehicle_note = veh;
+    if (msg) row.message = msg;
+    const { data, error } = await PNC.db().from('bookings').insert(row).select('id,status,total_price,price_label,expires_at,starts_at,ends_at').single();
+    if (error) {
+      PNC.toast(PNC.dbError(error), 'err');
+      go.textContent = L0.instant_book ? 'Reservar' : 'Pedir reserva';
+      await loadBusy(); updateEstimate();
+      return;
+    }
+    const ok = data.status === 'confirmada';
+    $('bform').innerHTML = `<div class="book-done">
+      <div class="book-done-ico ${ok ? 'ok' : ''}">${I(ok ? 'check' : 'today')}</div>
+      <h3>${ok ? 'Reserva confirmada' : 'Pedido enviado'}</h3>
+      <p>${esc(PNC.fmtRange(data.starts_at, data.ends_at))}</p>
+      <p class="muted">${esc(data.price_label || '')} · <b>${PNC.euro(data.total_price)}</b></p>
+      <p class="muted">${ok ? (CAR ? 'O local de recolha e as instruções' : 'A morada e as instruções de acesso') + ' já estão na sua reserva.'
+                          : `O anfitrião tem até ${esc(PNC.fmtDT(data.expires_at))} para responder.`}</p>
+      <a class="btn block" href="/reservas.html">Ver as minhas reservas</a>
+    </div>`;
+  }
+  async function loadBusy() {
+    const { data } = await PNC.db().rpc('busy_periods', CAR ? { p_listing: null, p_car: id } : { p_listing: id, p_car: null });
+    busy = data || [];
   }
 
   // ---------- Página ----------
@@ -204,6 +259,7 @@
       </div>`;
     ['bstart', 'bend'].forEach(x => $(x).addEventListener('change', updateEstimate));
     updateEstimate();
+    if ($('bgo')) $('bgo').onclick = submitBooking;
     wireReviewForm();
     if (window.L && L0.approx_lat != null) {
       const m = L.map('imap', { scrollWheelZoom: false }).setView([L0.approx_lat, L0.approx_lng], 15);
@@ -222,7 +278,15 @@
     user = u;
     if (error || !data) { root.innerHTML = `<div class="empty-card"><strong>Anúncio não encontrado</strong>Pode ter sido retirado. <a href="/">Voltar ao início</a></div>`; return; }
     L0 = data;
-    await loadReviews();
+    const now = new Date().toISOString();
+    const [, occ, mineDone] = await Promise.all([
+      loadReviews(),
+      db.rpc('occupied_now'),
+      user ? db.from('bookings').select('id').eq(MODE.reviewKey, id).eq('driver_id', user.id).eq('status', 'confirmada').lte('ends_at', now).limit(1) : Promise.resolve({ data: [] }),
+      loadBusy(),
+    ]);
+    L0.occupied = (occ.data || []).some(o => o.listing_id === id || o.car_id === id);
+    canReview = !!(mineDone.data && mineDone.data.length);
     render();
   })();
 })();

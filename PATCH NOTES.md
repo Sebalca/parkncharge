@@ -36,13 +36,22 @@ Regras que o Sebastião pediu explicitamente. Antes de qualquer alteração ou n
 - D25 A versão do site aparece no rodapé.
 - D27 O botão do canto superior direito (☰ + avatar) abre uma **janela** (como nas Finanças), não uma página: Entrar/Criar conta ou nome, Mudar para anfitrião/condutor, atalhos, Aprovação (admin), Perfil, Ajuda, Terminar sessão, e a versão no canto. Fecha ao clicar fora, mas não quando se carrega dentro e se larga fora. Existe também no telemóvel (cabeçalho compacto).
 - D28 Localização por defeito: **São Mamede de Infesta** (fictícia, por agora). "Usar a minha localização" passa ao GPS real e descobre a localidade.
-- D29 Estado de cada lugar: **Disponível agora** (aberto pelo horário e livre), **Ocupada** (ocupação simulada até às reservas da v0.4) ou **Fechada agora** (fora do horário, com a próxima abertura). O mapa mostra só as disponíveis (até 8, num raio de 5 km).
+- D29 Estado de cada lugar: **Disponível agora** (aberto pelo horário e livre), **Ocupada** / **Alugado** (há uma reserva confirmada a decorrer) ou **Fechada agora** (fora do horário, com a próxima abertura). O mapa mostra só as disponíveis (até 8, num raio de 5 km).
 - D26 `assets/app.js` e `assets/style.css` são carregados com `?v=<versão>` em todas as páginas, para os visitantes receberem logo a versão nova.
 
 - D60 Por cima da pesquisa há os separadores **Estacionar | Alugar carro**. "Alugar carro" é uma réplica do Explorar (mapa, "Carros em <localidade>" mesmo alugados, outras zonas, filtros múltiplos, página do carro, avaliações), com categorias próprias (Elétrico, Híbrido, Automático, Citadino, Familiar, SUV, 7 lugares, Carrinhas, Cadeira de bebé, Engate) e o terceiro campo da pesquisa = Lugares.
 - D61 Carregar num cartão (ou em "Ver lugar/carro" no mapa) abre a **página do anúncio**: `lugar.html?id=…` ou `carro.html?id=…`.
-- D62 **Avaliações** (1–5 estrelas + comentário) em todos os anúncios, com a média e o número no cartão e na página. Por agora qualquer conta avalia, uma vez por anúncio, e pode editar ou apagar; ninguém avalia os próprios anúncios (regra no servidor). Na v0.4 passa a exigir reserva concluída.
-- D63 Na página do anúncio, a caixa de reserva calcula o **preço estimado** (a combinação mais barata de horas, dias e meses). O botão diz "Reservas em breve" até à v0.4.
+- D62 **Avaliações** (1–5 estrelas + comentário) em todos os anúncios, com a média e o número no cartão e na página. Só avalia quem fez uma **reserva concluída** desse anúncio (desde a v0.4), uma vez por anúncio, e pode editar ou apagar; ninguém avalia os próprios anúncios (regras no servidor). (atualizada v0.4)
+- D63 Na página do anúncio, a caixa de reserva calcula o **preço** (a combinação mais barata de horas, dias e meses), igual ao que o servidor grava. (atualizada v0.4)
+
+**Reservas**
+- D70 Reservas de **lugares e carros**, numa só tabela e com as mesmas regras. O preço e o estado são sempre decididos no servidor. Não há reservas sobrepostas: as confirmadas e os pedidos ainda por responder bloqueiam o período.
+- D71 Anúncio com reserva instantânea → fica **confirmada** logo. Com aprovação → **pedido**, que o anfitrião aceita ou recusa até **24 h ou até ao início** (o que vier primeiro); depois expira sozinho.
+- D72 **Cancelar:** o condutor cancela um pedido a qualquer momento e uma reserva confirmada até ao início. O anfitrião cancela uma reserva confirmada, sempre com um **motivo**, que o condutor vê. A política de reembolso fica para a v1.1 (pagamentos).
+- D73 **Horário:** num lugar, o período inteiro tem de caber no horário; num carro, levantar e entregar têm de estar dentro do horário. Reservas de **30 dias ou mais** ignoram o horário semanal.
+- D74 A **morada exata** e as **instruções de acesso** (no carro: local de recolha, matrícula e instruções) aparecem ao condutor quando a reserva é confirmada, e até ao fim da reserva. São servidas por uma função no servidor, só a esse condutor.
+- D75 **Gestão:** o condutor tem a página **Reservas** (Próximas, Anteriores, Canceladas). O anfitrião tem **Hoje** (pedidos por responder, chegadas, saídas, a decorrer) e **Calendário** (próximos 30 dias), onde aceita, recusa ou cancela.
+- D76 Estados mostrados: Pedido enviado, Confirmada, A decorrer, Concluída, Recusada, Cancelada, Expirada. "A decorrer" e "Concluída" vêm das datas.
 
 **Anfitrião**
 - D30 Modo anfitrião separado, com "Mudar para anfitrião" / "Mudar para condutor" no perfil. Barra inferior: **Hoje, Calendário, Lugares, Mensagens, Menu**.
@@ -54,7 +63,7 @@ Regras que o Sebastião pediu explicitamente. Antes de qualquer alteração ou n
 - D36 Recusar um anúncio exige um motivo, que o anfitrião vê na lista dos seus lugares.
 
 **Dados de exemplo**
-- D50 Garagens (12), carros (10) e avaliações (65) de exemplo, em São Mamede de Infesta e arredores, têm sempre o selo **"Exemplo"**, ilustrações próprias, moradas sem número e nomes inventados. Só o admin pode criar exemplos ou ocupação simulada (regra no servidor). Apagam-se todos antes da beta (v0.8). Scripts: `supabase/seed/exemplos_sao_mamede.sql` e `supabase/seed/exemplos_carros_avaliacoes.sql`.
+- D50 Garagens (12), carros (10) e avaliações (65) de exemplo, em São Mamede de Infesta e arredores, têm sempre o selo **"Exemplo"**, ilustrações próprias, moradas sem número e nomes inventados. Desde a v0.4, o estado Ocupada/Alugado dos exemplos vem de **10 reservas de exemplo** (condutores com nomes inventados), em vez da ocupação simulada. Só o admin pode criar exemplos (regra no servidor). Apagam-se todos antes da beta (v0.8). Scripts: `supabase/seed/exemplos_sao_mamede.sql`, `exemplos_carros_avaliacoes.sql` e `exemplos_reservas.sql`.
 
 **Segurança**
 - S01 Nunca pôr chaves privadas no código (só a chave pública do Supabase, via `plataforma-core`). As regras de acesso são RLS no servidor.
@@ -62,6 +71,25 @@ Regras que o Sebastião pediu explicitamente. Antes de qualquer alteração ou n
 ---
 
 ## Histórico
+
+### v0.4 — 17/10/2026
+- **Reservas** de lugares e carros:
+  - o botão "Reservar" (reserva instantânea) ou "Pedir reserva" (com aprovação) já funciona;
+  - escolhe-se início e fim (no carro: levantar e entregar); o site avisa se fica fora do horário ou sobreposto e mostra o total;
+  - campos opcionais: veículo (matrícula ou modelo) e mensagem ao anfitrião;
+  - sem sessão, o botão leva ao login e volta à página.
+- A página do anúncio mostra os períodos **já reservados** e propõe por defeito o primeiro período livre dentro do horário.
+- Confirmação no fim: "Reserva confirmada" ou "Pedido enviado" (com o prazo do anfitrião), com o link para as reservas.
+- **Reservas** (condutor): Próximas / Anteriores / Canceladas, cancelar dentro das regras, ver a morada e as instruções quando confirmada, avaliar quando concluída.
+- **Hoje** e **Calendário** (anfitrião): pedidos por responder (aceitar/recusar), chegadas e saídas do dia, reservas a decorrer e agenda dos próximos 30 dias; cancelar uma confirmada com motivo.
+- Avaliações só para quem fez uma reserva concluída (D62 atualizada, confirmado). As avaliações existentes mantêm-se.
+- Exemplos: a ocupação simulada foi trocada por 10 reservas de exemplo (3 a decorrer, 3 futuras, 2 pedidos por responder, 2 concluídas).
+- Base de dados:
+  - migrações `20261017_v04_reservas.sql`, `v04b` e `v04c`;
+  - tabela `bookings` com restrição de exclusão contra sobreposições e trigger com todas as regras (horário, preço, estados, prazos, cancelamentos);
+  - funções `occupied_now`, `busy_periods`, `expire_requests` e `booking_access`.
+  - Regras testadas com 26 casos (condutor, outro condutor, anfitrião, anónimo, admin).
+- Segurança: as funções internas dos triggers deixaram de estar expostas na API.
 
 ### v0.2c — 10/10/2026
 - Página de cada garagem e carro (`lugar.html`, `carro.html`, código em `assets/item.js`):

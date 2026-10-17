@@ -113,9 +113,33 @@ const CSS = ler('assets/style.css');
     return PNC.estimate(l, s, h(3)).total === 6 && PNC.estimate(l, s, h(8)).total === 10 && PNC.estimate(l, s, h(26)).total === 14 && PNC.estimate(l, s, h(24 * 40)).total === 300 && PNC.estimate(l, s, s) === null;
   }));
   t('D62', 'páginas do lugar e do carro carregam item.js (galeria, avaliações, reserva com preço)', ['lugar.html', 'carro.html'].every(f => /assets\/item\.js\?v=/.test(ler(f))) && /data-tipo="carro"/.test(ler('carro.html'))
-    && ['reviewsBlock', 'bookingBox', 'Reservas em breve', 'Total estimado', 'morada exata', 'Exemplo'].every(x => ler('assets/item.js').includes(x)));
+    && ['reviewsBlock', 'bookingBox', 'submitBooking', 'busy_periods', 'Total', 'morada exata', 'Exemplo'].every(x => ler('assets/item.js').includes(x)));
   t('D62', 'avaliações: 1 por pessoa, nunca nos próprios anúncios, só o admin cria exemplos (servidor)',
     /reviews_one_per_listing/.test(SQL) && /reviews_one_per_car/.test(SQL) && /Não pode avaliar os seus próprios anúncios/.test(SQL) && /if not admin then new\.author_id := auth\.uid\(\); new\.is_demo := false; end if;/.test(SQL));
+  console.log('Reservas');
+  t('D70', 'reservas de lugares e carros na mesma tabela, sem sobreposições (servidor)', /create table parkncharge\.bookings/.test(SQL) && /bookings_sem_sobreposicao_lugar/.test(SQL) && /bookings_sem_sobreposicao_carro/.test(SQL) && /check \(\(listing_id is null\) <> \(car_id is null\)\)/.test(SQL));
+  t('D70', 'preço e estado decididos no servidor (o browser não os escolhe)', /select bp\.total, bp\.label into new\.total_price, new\.price_label/.test(SQL) && /new\.status := 'confirmada'; new\.decided_at := now\(\)/.test(SQL));
+  t('D71', 'pedido expira em 24 h ou no início (o que vier primeiro)', /new\.expires_at := least\(now\(\) \+ interval '24 hours', new\.starts_at\)/.test(SQL) && /expire_requests/.test(SQL));
+  t('D72', 'cancelar: condutor até ao início; anfitrião com motivo', /A reserva já começou e não pode ser cancelada/.test(SQL) && /Indique o motivo do cancelamento/.test(SQL));
+  t('D73', 'horário: lugares período inteiro, carros levantar/entregar, 30 dias ou mais ignoram (cliente = servidor)', await ev(() => {
+    const h = (o, c, days = [0, 1, 2, 3, 4, 5, 6]) => days.map(w => ({ weekday: w, opens_at: o, closes_at: c }));
+    const D = (d, hh) => new Date(2026, 9, 19 + d, hh);   // 19/10/2026 é segunda-feira
+    const f = PNC.fitsSchedule;
+    return f(h('00:00', '24:00'), D(0, 22), D(2, 10), false) && !f(h('08:00', '20:00'), D(0, 19), D(0, 21), false)
+      && !f(h('08:00', '20:00'), D(0, 10), D(1, 10), false) && f(h('08:00', '20:00'), D(0, 10), D(3, 18), true)
+      && !f(h('08:00', '20:00'), D(0, 21), D(1, 10), true) && f(h('08:00', '20:00'), D(0, 22), D(31, 22), false)
+      && !f(h('08:00', '20:00', [0, 1, 2, 3, 4]), D(5, 10), D(5, 12), false);
+  }) && /fits_schedule/.test(SQL) && /interval '30 days'/.test(SQL));
+  t('D62', 'avaliações só depois de uma reserva concluída (servidor + página)', /Só quem fez uma reserva concluída pode avaliar/.test(SQL) && /canReview/.test(ler('assets/item.js')));
+  t('D74', 'morada e instruções só para o condutor de reserva confirmada, até ao fim', /b\.status = 'confirmada' and now\(\) < b\.ends_at/.test(SQL) && /booking_access/.test(ler('reservas.html')) && !/listing_private|car_private/.test(ler('reservas.html')));
+  t('D75', 'gestão: Reservas (condutor) e Hoje/Calendário com aceitar/recusar (anfitrião)', ['Próximas', 'Anteriores', 'Canceladas', 'Cancelar'].every(x => ler('reservas.html').includes(x))
+    && ['Pedidos por responder', 'Chegadas hoje', 'Saídas hoje', 'Aceitar', 'Recusar', 'Próximos 30 dias'].every(x => ler('anfitriao.html').includes(x)));
+  t('D76', 'estado mostrado: a decorrer / concluída vêm das datas', await ev(() => {
+    const n = new Date(), m = x => new Date(n.getTime() + x * 36e5).toISOString();
+    return PNC.bookingState({ status: 'confirmada', starts_at: m(-2), ends_at: m(2) }) === 'decorrer' && PNC.bookingState({ status: 'confirmada', starts_at: m(-5), ends_at: m(-1) }) === 'concluida'
+      && PNC.bookingState({ status: 'pedido', expires_at: m(-1), starts_at: m(5), ends_at: m(6) }) === 'expirada' && PNC.bookingState({ status: 'confirmada', starts_at: m(1), ends_at: m(2) }) === 'confirmada';
+  }));
+  t('D50', 'ocupação dos exemplos vem de reservas (Explorar usa occupied_now)', /occupied_now/.test(ler('index.html')) && /exemplos_reservas\.sql/.test(fs.readdirSync(path.join(ROOT, 'supabase/seed')).join(' ')));
   t('D34', 'página do anúncio não lê dados privados', !/listing_private|car_private/.test(ler('assets/item.js')));
 
   console.log('Menu da conta');

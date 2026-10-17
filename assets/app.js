@@ -2,7 +2,7 @@
 // Usa o auth.js partilhado (plataforma-core): window.Auth e window.plataforma.
 (function () {
   // Versão atual — atualizar em cada alteração (ver PATCH NOTES.md)
-  const APP_VERSAO = 'v0.2c';
+  const APP_VERSAO = 'v0.4';
 
   const ICONS = {
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
@@ -229,10 +229,55 @@
   const scheduleOf = l => l.listing_schedule || l.car_schedule || l.schedule || [];
   function availability(l, d = new Date()) {
     const car = !!l.car_schedule;
-    if (l.demo_occupied) return { key: 'ocupada', label: car ? 'Alugado' : 'Ocupada' };
+    if (l.occupied || l.demo_occupied) return { key: 'ocupada', label: car ? 'Alugado' : 'Ocupada' };
     const sch = scheduleOf(l);
     if (!openNow(sch, d)) { const n = nextOpening(sch, d); return { key: 'fechada', label: (car ? 'Indisponível agora' : 'Fechada agora') + (n ? ' · ' + n.replace('abre', car ? 'disponível' : 'abre') : '') }; }
     return { key: 'disponivel', label: 'Disponível agora' };
+  }
+
+  // Cabe no horário? (igual à regra do servidor: lugares — período inteiro; carros — levantar e entregar;
+  // 30 dias ou mais ignoram o horário). Usa a hora local do browser (Portugal).
+  function fitsSchedule(sch, s, e, car) {
+    if (!(e > s)) return false;
+    if (e - s >= 30 * 864e5) return true;
+    const wd = d => (d.getDay() + 6) % 7, t = d => d.toTimeString().slice(0, 5);
+    const day = d => (sch || []).find(x => x.weekday === wd(d));
+    const cl = x => (hhmm(x.closes_at) === '00:00' ? '24:00' : hhmm(x.closes_at));
+    if (car) {
+      const a = day(s); if (!a || t(s) < hhmm(a.opens_at) || t(s) >= cl(a)) return false;
+      if (t(e) === '00:00') { const p = day(new Date(e - 1)); return !!p && cl(p) === '24:00'; }
+      const b = day(e); return !!b && t(e) > hhmm(b.opens_at) && t(e) <= cl(b);
+    }
+    const d = new Date(s); d.setHours(0, 0, 0, 0);
+    const endDay = new Date(e); endDay.setHours(0, 0, 0, 0);
+    while (d <= endDay) {
+      const last = d.getTime() === endDay.getTime();
+      if (last && t(e) === '00:00') break;
+      const segS = d.getTime() === new Date(new Date(s).setHours(0, 0, 0, 0)).getTime() ? t(s) : '00:00';
+      const x = day(d); if (!x || segS < hhmm(x.opens_at)) return false;
+      if (last) { if (t(e) > cl(x)) return false; } else if (cl(x) !== '24:00') return false;
+      d.setDate(d.getDate() + 1);
+    }
+    return true;
+  }
+  const BOOKING_STATUS = {
+    pedido: ['Pedido enviado', 'st-pending'], confirmada: ['Confirmada', 'st-live'], recusada: ['Recusada', 'st-rejected'],
+    cancelada: ['Cancelada', 'st-paused'], expirada: ['Expirada', 'st-draft'], decorrer: ['A decorrer', 'st-live'], concluida: ['Concluída', 'st-draft'],
+  };
+  // Estado mostrado (concluída / a decorrer vêm das datas)
+  function bookingState(b, now = new Date()) {
+    if (b.status === 'confirmada') {
+      if (new Date(b.ends_at) <= now) return 'concluida';
+      if (new Date(b.starts_at) <= now) return 'decorrer';
+    }
+    if (b.status === 'pedido' && b.expires_at && new Date(b.expires_at) <= now) return 'expirada';
+    return b.status;
+  }
+  const fmtDT = d => new Date(d).toLocaleString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  function fmtRange(s, e) {
+    const a = new Date(s), b = new Date(e);
+    const same = a.toDateString() === b.toDateString();
+    return same ? `${fmtDT(a)} – ${b.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}` : `${fmtDT(a)} → ${fmtDT(b)}`;
   }
 
   // ---------------- Avaliações ----------------
@@ -393,14 +438,15 @@
     const m = err.message || '';
     if (/schema must be one of|invalid schema/i.test(m)) return 'O servidor ainda não está configurado para o Parkncharge. Tente mais tarde.';
     if (/row-level security|permission denied/i.test(m)) return 'Sem permissão para esta operação.';
-    if (/Falta|Indique|Complete|Adicione|Máximo|Guarde|Alteração de estado/.test(m)) return m;
+    if (err.code === '23P01' || /exclusion|sem_sobreposicao/i.test(m)) return 'Já existe uma reserva nesse período. Escolha outras datas.';
+    if (/Falta|Indique|Complete|Adicione|Máximo|Guarde|Alteração|Fora do horário|reserva|Reserva|Não pode|Este anúncio|Este pedido|Só quem|Só se podem|já/.test(m)) return m;
     if (/check constraint/i.test(m)) return 'Há um valor inválido. Verifique os campos.';
     return 'Ocorreu um erro. Tente novamente.';
   }
 
   window.PNC = {
     APP_VERSAO, DEFAULT_LOC, openNow, nextOpening, availability, scheduleOf, ratingOf, fmtRating, stars, estimate,
-    CAR_CATEGORIES, CAR_LABELS, SEATS, MODES, matchAll, icon, LOGO, renderChrome, db, photoUrl, BUCKET, currentUser, requireLogin, isAdmin, displayName,
+    CAR_CATEGORIES, CAR_LABELS, SEATS, MODES, matchAll, fitsSchedule, BOOKING_STATUS, bookingState, fmtDT, fmtRange, icon, LOGO, renderChrome, db, photoUrl, BUCKET, currentUser, requireLogin, isAdmin, displayName,
     CATEGORIES, VEHICLES, SPOT_TYPES, ZONES, CHARGERS, WEEKDAYS, STATUS,
     euro, mainPrice, esc, distance, walkText, toast, greeting, authError, dbError, SITE_ID: 'parkncharge',
   };

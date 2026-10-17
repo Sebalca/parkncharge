@@ -58,27 +58,29 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 - [x] Página do carro com características, extras, horário de levantamento, zona, avaliações e preço estimado *(v0.2c)*
 - [x] Base de dados de carros com as mesmas regras dos lugares + 10 carros de exemplo *(v0.2c)*
 - [ ] Publicar carros no modo anfitrião (assistente) e aprová-los em `admin.html`
-- [ ] Reservas de carros (com as reservas da v0.4) e documentos do condutor (carta de condução)
+- [x] Reservas de carros *(v0.4)*
+- [ ] Documentos do condutor (carta de condução) antes de levantar o carro
 - [ ] Verificar o enquadramento legal do aluguer entre particulares antes da beta
 
 ## v0.4 — Página do lugar e reservas
 - [x] Página do lugar: fotos, atributos, horário, zona no mapa, avaliação média, comentários *(v0.2c)*
 - [x] Preço calculado para as datas escolhidas *(v0.2c)*
-- [ ] Botão "Reservar" a funcionar (agora diz "Reservas em breve")
-- [ ] Pedido de reserva com datas/horas e preço calculado
-- [ ] Reserva instantânea ou com aprovação do anfitrião
-- [ ] Sem reservas sobrepostas (restrição na base de dados)
-- [ ] Estados: pedido → confirmada → a decorrer → concluída / cancelada / recusada
+- [x] Botão "Reservar" / "Pedir reserva" a funcionar, para lugares e carros *(v0.4)*
+- [x] Pedido de reserva com datas/horas, veículo, mensagem e preço calculado no servidor *(v0.4)*
+- [x] Reserva instantânea ou com aprovação do anfitrião (prazo de 24 h ou até ao início) *(v0.4)*
+- [x] Sem reservas sobrepostas (restrição na base de dados) e dentro do horário *(v0.4)*
+- [x] Estados: pedido → confirmada → a decorrer → concluída / cancelada / recusada / expirada *(v0.4)*
 
 ## v0.5 — As minhas reservas e comunicação
-- [ ] "My rents": reservas como condutor e como anfitrião
+- [x] "My rents": Reservas (condutor) e Hoje/Calendário (anfitrião) *(adiantado para a v0.4)*
 - [ ] Mensagens condutor ↔ anfitrião por reserva
 - [ ] Emails automáticos (pedido, confirmação, lembrete) via Edge Function
-- [ ] Instruções de acesso (código, piso, nº do lugar) só visíveis após confirmação
+- [x] Morada e instruções de acesso só visíveis após confirmação *(adiantado para a v0.4)*
 
 ## v0.6 — Confiança
 - [x] Avaliações e comentários dos anúncios (estrelas + texto, 1 por pessoa, editar/apagar) *(v0.2c — por agora qualquer conta)*
-- [ ] Avaliações só após reserva concluída, e do anfitrião ao condutor (nos dois sentidos)
+- [x] Avaliações só após reserva concluída *(v0.4)*
+- [ ] Avaliações do anfitrião ao condutor (nos dois sentidos)
 - [ ] Favoritos (coração)
 - [ ] Denúncias e painel de administração
 
@@ -88,7 +90,7 @@ Lançamento no **Porto**. Site web (PWA) agora, app nativa depois.
 - [ ] Páginas de ajuda, FAQ e contacto
 
 ## v0.8 — Beta fechada no Porto
-- [ ] Apagar os exemplos (`delete from parkncharge.listings where is_demo; delete from parkncharge.cars where is_demo; delete from parkncharge.reviews where is_demo;`) e retirar a ocupação simulada
+- [ ] Apagar os exemplos (`delete from parkncharge.bookings where is_demo; delete from parkncharge.reviews where is_demo; delete from parkncharge.listings where is_demo; delete from parkncharge.cars where is_demo;`)
 - [ ] PWA instalável (manifest, ícones, offline básico)
 - [ ] Termos de utilização e política de privacidade (RGPD)
 - [ ] Pagamento combinado entre as partes (indicação clara na reserva)

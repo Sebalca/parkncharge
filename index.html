@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="assets/style.css?v=0.2c">
+  <link rel="stylesheet" href="assets/style.css?v=0.4">
 </head>
 <body>
   <section class="hero">
@@ -81,7 +81,7 @@
     </div>
   </div>
 
-  <script src="assets/app.js?v=0.2c"></script>
+  <script src="assets/app.js?v=0.4"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/gh/sebalca/plataforma-core@main/auth.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -349,6 +349,10 @@
         .select(`${m.fields},${m.schedule}(weekday,opens_at,closes_at),reviews(rating)`)
         .eq('status', 'ativo').order('approved_at', { ascending: false }).limit(300);
       listings = cache[state.mode] = error ? [] : data;
+      // ocupados agora (reservas confirmadas a decorrer)
+      const { data: occ } = await db.rpc('occupied_now');
+      const busy = new Set((occ || []).map(o => o.listing_id || o.car_id));
+      listings.forEach(l => { l.occupied = busy.has(l.id); });
     }
 
     (async () => {

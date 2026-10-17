@@ -20,7 +20,8 @@ separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque
 - v0.2 (aplicado): `host_profiles`, `listings`, `listing_private`, `listing_photos`, `listing_schedule`, bucket `parkncharge`.
 - v0.2b (aplicado): `listings.is_demo` e `listings.demo_occupied` (exemplos e ocupação simulada, só o admin os liga). Exemplos em `supabase/seed/exemplos_sao_mamede.sql`.
 - v0.2c (aplicado): carros (`cars`, `car_private`, `car_photos`, `car_schedule`, com as mesmas regras dos lugares) e `reviews` (lugares e carros). Exemplos em `supabase/seed/exemplos_carros_avaliacoes.sql`.
-- A seguir: `bookings` (v0.4), `messages` (v0.5), `favorites` (v0.6).
+- v0.4 (aplicado): `bookings` (reservas de lugares e carros) e as funções `fits_schedule`, `booking_price`, `occupied_now`, `busy_periods`, `expire_requests`, `booking_access`. `reviews` passa a exigir reserva concluída. Exemplos em `supabase/seed/exemplos_reservas.sql`; `demo_occupied` deixou de ser usado.
+- A seguir: `messages` (v0.5), `favorites` (v0.6).
 
 ## Regras nos triggers (v0.2)
 - O anfitrião nunca se auto-aprova: só pode passar rascunho/recusado → pendente, pendente → rascunho, ativo ↔ pausado.
@@ -40,9 +41,12 @@ separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque
 - **listing_private** — `listing_id`, `address`, `postal_code`, `lat`, `lng`, `access_instructions`
 - **listing_photos** — `id`, `listing_id`, `storage_path`, `position`
 - **listing_schedule** — `listing_id`, `weekday` (0–6), `opens_at`, `closes_at`
-- **bookings** — `id`, `listing_id`, `driver_id`, `period` (tstzrange), `booking_type` (hora/dia/mês), `total_price`,
-  `status` (pedido/confirmada/recusada/cancelada/concluída), `created_at`
-  - Restrição de exclusão (`btree_gist`) para impedir reservas confirmadas sobrepostas no mesmo lugar
+- **bookings** — `id`, `listing_id` **ou** `car_id`, `driver_id`, `host_id` (copiado do anúncio), `driver_name` (primeiro nome), `starts_at`, `ends_at`, `period` (tstzrange gerado),
+  `status` (pedido/confirmada/recusada/cancelada/expirada — "a decorrer" e "concluída" vêm das datas), `total_price`, `price_label`, `vehicle_note`, `message`,
+  `expires_at` (prazo do pedido: 24 h ou até ao início), `decided_at`, `cancel_reason`, `cancelled_by` (condutor/anfitriao/admin), `is_demo`, `created_at`, `updated_at`
+  - Restrições de exclusão (`btree_gist`) por lugar e por carro: pedidos ativos e confirmadas não se sobrepõem
+  - Trigger `bookings_guard`: anúncio ativo, não o próprio, início no futuro, 30 min a 1 ano, `fits_schedule`, preço por `booking_price`, estado inicial (instantânea → confirmada; senão pedido); transições permitidas (anfitrião aceita/recusa/cancela com motivo; condutor cancela pedido ou confirmada até ao início; pedidos vencidos → expirada); os dados da reserva nunca mudam
+  - Funções: `occupied_now()` (ocupados agora, público), `busy_periods(lugar, carro)` (períodos ocupados sem dizer de quem, público), `expire_requests()`, `booking_access(reserva)` (morada/instruções só para o condutor de reserva confirmada até ao fim, o anfitrião e o admin)
 - **messages** — `id`, `booking_id`, `sender_id`, `body`, `created_at`
 - **cars** — como `listings`, mas com `brand`, `model`, `year`, `category` (citadino/familiar/suv/carrinha/monovolume/desportivo), `fuel` (gasolina/gasoleo/hibrido/eletrico/gpl), `transmission` (manual/automatica), `seats`, `doors`, `range_km`, `features[]` (ac, gps, bluetooth, cadeira_bebe, engate, teto_panoramico, camara_marcha_atras, cruise_control), `km_included_day`, `min_age`, `deposit`
 - **car_private** — `car_id`, `address`, `lat`, `lng`, `plate`, `pickup_instructions`
@@ -50,14 +54,15 @@ separados das tabelas genéricas (`profiles`, `sites`, `user_site_data`), porque
 - **car_schedule** — `car_id`, `weekday`, `opens_at`, `closes_at` (quando se pode levantar)
 - **reviews** — `id`, `listing_id` **ou** `car_id`, `author_id`, `author_name` (primeiro nome copiado do perfil, que não é público), `rating` 1–5, `comment`, `is_demo`, `created_at`, `updated_at`
   - 1 por pessoa e anúncio (índices únicos, exceto exemplos); o trigger `reviews_guard` impede avaliar anúncios não ativos ou os próprios e só deixa o admin criar exemplos
-  - v0.4: ligar a `booking_id` e exigir reserva concluída
+  - v0.4: só quem tem uma reserva confirmada já terminada desse anúncio pode avaliar
 - **favorites** — `user_id`, `listing_id`
 
 ## Regras de acesso (RLS)
 - Anúncios `ativo`: leitura pública (sem `access_instructions`, servidas por função só ao condutor com reserva confirmada).
 - Anúncios: só o anfitrião cria/edita os seus.
-- Reservas e mensagens: só o condutor e o anfitrião dessa reserva.
-- Avaliações: leitura pública; escrita só por participante de reserva concluída.
+- Reservas: só o condutor, o anfitrião dessa reserva e o admin veem e alteram (sem apagar); anónimos só veem os períodos ocupados, pela função `busy_periods`.
+- Mensagens (v0.5): só o condutor e o anfitrião dessa reserva.
+- Avaliações: leitura pública; escrita só por quem tem uma reserva concluída.
 - Favoritos: só o próprio.
 - Nenhuma service key no frontend nem no GitHub.
 
